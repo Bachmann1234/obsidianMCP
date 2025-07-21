@@ -3,8 +3,8 @@
 # Obsidian MCP Server Docker Wrapper Script
 # This script allows Claude Desktop to communicate with the dockerized MCP server via stdio
 
-# Configuration - Edit these paths for your setup
-VAULT_PATH="/path/to/your/obsidian/vault"
+# Configuration - Use environment variable or default path
+VAULT_PATH="${OBSIDIAN_VAULT_PATH:-/path/to/your/obsidian/vault}"
 DOCKER_IMAGE="obsidian-mcp-server"
 
 # Optional: Build image if it doesn't exist

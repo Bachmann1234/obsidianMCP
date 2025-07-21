@@ -452,7 +452,12 @@ class TestObsidianMCPServer:
                 
                 mock_start.assert_called_once()
                 mock_stop.assert_called_once()
-                mock_server.run.assert_called_once_with(*mock_streams)
+                # Check that run was called with streams and initialization options
+                assert mock_server.run.call_count == 1
+                args = mock_server.run.call_args[0]
+                assert len(args) == 3  # read_stream, write_stream, initialization_options
+                assert args[0] == mock_streams[0]
+                assert args[1] == mock_streams[1]
 
 
 class TestServerMain:

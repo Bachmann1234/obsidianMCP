@@ -14,10 +14,12 @@ from mcp.types import (
     CallToolRequestParams,
     CallToolResult,
     ListToolsRequest,
+    ServerCapabilities,
     TextContent,
     Tool,
 )
 from mcp import McpError
+from mcp.server.models import InitializationOptions
 from pydantic import BaseModel
 
 from .config import ServerConfig, load_config_from_env
@@ -325,12 +327,30 @@ class ObsidianMCPServer:
             # Get vault info
             vault_notes = self.parser.discover_notes()
             
+            # Show first few files for debugging
+            file_list = ""
+            if vault_notes:
+                def format_note_path(note):
+                    if hasattr(note, 'relative_to'):
+                        # It's a Path object
+                        return str(note.relative_to(self.config.vault_path))
+                    else:
+                        # It's a string
+                        return str(note)
+                
+                file_list = "\n" + "\n".join(f"  - {format_note_path(note)}" for note in vault_notes[:5])
+                if len(vault_notes) > 5:
+                    file_list += f"\n  - ... and {len(vault_notes) - 5} more"
+            else:
+                file_list = "\n  - No .md files found"
+            
             response_parts = [
                 "# Vault Statistics",
                 "",
                 "## Vault Information",
                 f"- **Path:** {self.config.vault_path}",
-                f"- **Total markdown files:** {len(vault_notes)}",
+                f"- **Path exists:** {self.config.vault_path.exists()}",
+                f"- **Total markdown files:** {len(vault_notes)}{file_list}",
                 "",
                 "## Search Index",
                 f"- **Indexed documents:** {index_stats.get('doc_count', 0)}",
@@ -362,28 +382,40 @@ class ObsidianMCPServer:
         logger.info("Initializing search index...")
         
         try:
-            # Check if we can do incremental update instead of full rebuild
-            if self.search_index.needs_update(self.config.vault_path):
-                logger.info("Index needs updating - checking for incremental update...")
+            # First check how many notes exist in vault
+            note_paths = self.parser.discover_notes()
+            logger.info(f"Discovered {len(note_paths)} notes in vault")
+            
+            # Check current index stats
+            current_stats = self.search_index.get_stats()
+            logger.info(f"Current index has {current_stats.get('doc_count', 0)} documents")
+            
+            # If we have notes but no index, or index needs update
+            if note_paths and (current_stats.get('doc_count', 0) == 0 or self.search_index.needs_update(self.config.vault_path)):
+                logger.info("Index needs updating...")
                 
-                # Try incremental update first
-                stats = self.search_index.incremental_update(
-                    self.config.vault_path, 
-                    self.parser
-                )
+                # Try incremental update first if index exists
+                if current_stats.get('doc_count', 0) > 0:
+                    logger.info("Attempting incremental update...")
+                    stats = self.search_index.incremental_update(
+                        self.config.vault_path, 
+                        self.parser
+                    )
+                    
+                    if stats['updated'] > 0 or stats['added'] > 0:
+                        logger.info(f"Incremental update completed: {stats}")
+                        return
                 
-                if stats['updated'] > 0 or stats['added'] > 0:
-                    logger.info(f"Incremental update completed: {stats}")
-                    return
-                else:
-                    logger.info("Performing full index rebuild...")
+                logger.info("Performing full index rebuild...")
+            elif not note_paths:
+                logger.warning("No markdown notes found in vault")
+                return
             else:
                 logger.info("Index is up to date")
                 return
             
             # Full rebuild if incremental update wasn't sufficient
-            note_paths = self.parser.discover_notes()
-            logger.info(f"Found {len(note_paths)} notes to index")
+            logger.info(f"Rebuilding index with {len(note_paths)} notes")
             
             # Parse all notes
             notes = []
@@ -417,7 +449,14 @@ class ObsidianMCPServer:
             
             # Run MCP server
             async with stdio_server() as (read_stream, write_stream):
-                await self.server.run(read_stream, write_stream, {})
+                initialization_options = InitializationOptions(
+                    server_name="obsidian-mcp-server",
+                    server_version="0.1.0",
+                    capabilities=ServerCapabilities(
+                        tools={}
+                    )
+                )
+                await self.server.run(read_stream, write_stream, initialization_options)
         finally:
             # Clean up
             self.watcher.stop()
