@@ -48,9 +48,8 @@ class ObsidianMCPServer:
         self.server = Server("obsidian-mcp-server")
         self._setup_tools()
         
-        # Initialize index if needed
-        if config.auto_rebuild_index:
-            asyncio.create_task(self._initialize_index())
+        # Store flag to initialize index later in async context
+        self._should_initialize_index = config.auto_rebuild_index
     
     def _setup_tools(self) -> None:
         """Setup MCP tools."""
@@ -409,12 +408,16 @@ class ObsidianMCPServer:
     async def run(self) -> None:
         """Run the MCP server."""
         try:
+            # Initialize index if needed
+            if self._should_initialize_index:
+                await self._initialize_index()
+            
             # Start file watcher
             self.watcher.start()
             
             # Run MCP server
-            async with stdio_server() as streams:
-                await self.server.run(*streams)
+            async with stdio_server() as (read_stream, write_stream):
+                await self.server.run(read_stream, write_stream, {})
         finally:
             # Clean up
             self.watcher.stop()

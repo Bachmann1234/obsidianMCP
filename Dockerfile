@@ -24,6 +24,10 @@ RUN pip install -e .
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash obsidian
+
+# Create index directory with proper permissions
+RUN mkdir -p /app/index && chown obsidian:obsidian /app/index
+
 USER obsidian
 
 # Set environment variables
