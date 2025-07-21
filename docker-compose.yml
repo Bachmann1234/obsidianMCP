@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  obsidian-mcp:
+    build: .
+    container_name: obsidian-mcp-server
+    environment:
+      - OBSIDIAN_VAULT_PATH=/vault
+      - OBSIDIAN_INDEX_PATH=/app/index
+      - OBSIDIAN_MAX_RESULTS=50
+      - OBSIDIAN_AUTO_REBUILD_INDEX=true
+      - OBSIDIAN_WATCH_CHANGES=true
+      - OBSIDIAN_INCLUDE_CONTENT=true
+    volumes:
+      # Mount your Obsidian vault (read-only for safety)
+      - /path/to/your/obsidian/vault:/vault:ro
+      # Mount index directory for persistence
+      - obsidian-index:/app/index
+    restart: unless-stopped
+    # For MCP, we typically use stdio transport
+    # This setup is more for testing/development
+    stdin_open: true
+    tty: true
+
+volumes:
+  obsidian-index:
+    driver: local
