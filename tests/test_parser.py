@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -201,3 +202,64 @@ def test_ignore_obsidian_folder(temp_vault):
     
     # Ensure no .obsidian files are included
     assert not any(".obsidian" in path for path in note_paths)
+
+
+def test_parse_note_file_error(temp_vault):
+    """Test parsing a note that cannot be read."""
+    parser = ObsidianParser(temp_vault)
+    
+    # Create a note file
+    note_path = temp_vault / "test.md"
+    note_path.write_text("# Test")
+    
+    # Mock file reading to raise an exception
+    with patch('builtins.open', side_effect=IOError("Permission denied")):
+        note = parser.parse_note(note_path)
+        assert note is None
+
+
+def test_parse_non_markdown_file(temp_vault):
+    """Test parsing a non-markdown file returns None."""
+    parser = ObsidianParser(temp_vault)
+    
+    # Create a non-markdown file
+    txt_file = temp_vault / "test.txt"
+    txt_file.write_text("Not markdown")
+    
+    note = parser.parse_note(txt_file)
+    assert note is None
+
+
+def test_clear_cache(temp_vault):
+    """Test clearing the parser cache."""
+    parser = ObsidianParser(temp_vault)
+    
+    # Parse a note to populate cache
+    note_path = temp_vault / "test.md"
+    note_path.write_text("# Test")
+    note = parser.parse_note(note_path)
+    
+    assert len(parser._note_cache) == 1
+    
+    parser.clear_cache()
+    assert len(parser._note_cache) == 0
+
+
+def test_extract_tags_list_format(temp_vault):
+    """Test tag extraction with list format in frontmatter."""
+    parser = ObsidianParser(temp_vault)
+    
+    note_path = temp_vault / "tag-list-test.md"
+    note_path.write_text("""---
+tags:
+  - tag1
+  - tag2
+  - tag3
+---
+
+Content with #inline-tag.
+""")
+    
+    note = parser.parse_note(note_path)
+    expected_tags = {"tag1", "tag2", "tag3", "inline-tag"}
+    assert note.tags == expected_tags
