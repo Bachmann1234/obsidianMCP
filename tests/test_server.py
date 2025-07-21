@@ -73,13 +73,15 @@ class TestObsidianMCPServer:
             mock_server_class.assert_called_once_with("obsidian-mcp-server")
     
     @pytest.mark.asyncio
-    async def test_initialize_index(self, server_config):
-        """Test index initialization."""
+    async def test_initialize_index_full_rebuild(self, server_config):
+        """Test index initialization with full rebuild."""
         with patch('obsidian_mcp.server.Server'):
             server = ObsidianMCPServer(server_config)
             
             # Mock the parser and search_index methods
-            with patch.object(server.parser, 'discover_notes') as mock_discover, \
+            with patch.object(server.search_index, 'needs_update', return_value=True), \
+                 patch.object(server.search_index, 'incremental_update', return_value={'updated': 0, 'added': 0}), \
+                 patch.object(server.parser, 'discover_notes') as mock_discover, \
                  patch.object(server.parser, 'parse_note') as mock_parse, \
                  patch.object(server.parser, 'compute_backlinks') as mock_backlinks, \
                  patch.object(server.search_index, 'rebuild_index') as mock_rebuild:
@@ -95,6 +97,30 @@ class TestObsidianMCPServer:
                 mock_parse.assert_called_once_with(Path("test.md"))
                 mock_backlinks.assert_called_once_with([mock_note])
                 mock_rebuild.assert_called_once_with([mock_note])
+    
+    @pytest.mark.asyncio
+    async def test_initialize_index_up_to_date(self, server_config):
+        """Test index initialization when index is up to date."""
+        with patch('obsidian_mcp.server.Server'):
+            server = ObsidianMCPServer(server_config)
+            
+            with patch.object(server.search_index, 'needs_update', return_value=False):
+                await server._initialize_index()
+                
+                # Should not trigger any rebuilding
+    
+    @pytest.mark.asyncio
+    async def test_initialize_index_incremental_update(self, server_config):
+        """Test index initialization with incremental update."""
+        with patch('obsidian_mcp.server.Server'):
+            server = ObsidianMCPServer(server_config)
+            
+            with patch.object(server.search_index, 'needs_update', return_value=True), \
+                 patch.object(server.search_index, 'incremental_update', return_value={'updated': 2, 'added': 1}):
+                
+                await server._initialize_index()
+                
+                # Should complete with incremental update, no full rebuild
     
     @pytest.mark.asyncio
     async def test_search_notes_basic(self, server_config):

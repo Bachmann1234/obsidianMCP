@@ -25,6 +25,10 @@ class ServerConfig(BaseModel):
         default=True,
         description="Whether to automatically rebuild index on startup if needed"
     )
+    incremental_update: bool = Field(
+        default=True,
+        description="Whether to use incremental updates when possible instead of full rebuild"
+    )
     watch_for_changes: bool = Field(
         default=True,
         description="Whether to watch for file changes and update index incrementally"
@@ -80,5 +84,8 @@ def load_config_from_env() -> ServerConfig:
     
     if include_content := os.getenv("OBSIDIAN_INCLUDE_CONTENT"):
         config_data["include_content_in_search"] = include_content.lower() == "true"
+    
+    if incremental := os.getenv("OBSIDIAN_INCREMENTAL_UPDATE"):
+        config_data["incremental_update"] = incremental.lower() == "true"
     
     return ServerConfig(**config_data)

@@ -78,6 +78,7 @@ Optional environment variables:
 export OBSIDIAN_INDEX_PATH="/path/to/index"  # Default: vault/.obsidian-mcp-index
 export OBSIDIAN_MAX_RESULTS=50               # Default: 50
 export OBSIDIAN_AUTO_REBUILD_INDEX=true      # Default: true
+export OBSIDIAN_INCREMENTAL_UPDATE=true      # Default: true
 export OBSIDIAN_WATCH_CHANGES=true           # Default: true
 export OBSIDIAN_INCLUDE_CONTENT=true         # Default: true
 ```
@@ -210,10 +211,38 @@ isort src/
 mypy src/
 ```
 
+## Multi-Machine Usage
+
+**Perfect for users who sync vaults across multiple machines!**
+
+### Intelligent Index Updates
+- **Incremental updates**: Only re-indexes files that have changed since last run
+- **Fast startup**: Skips full rebuild when vault hasn't changed
+- **Cross-machine sync**: Works with Obsidian Sync, iCloud, Dropbox, git, etc.
+
+### How It Works
+1. **First run**: Builds complete search index
+2. **Subsequent runs**: Compares file modification times
+3. **Only updates changed files**: Fast startup even with large vaults
+4. **Handles file moves/renames**: Maintains search accuracy
+
+### Configuration for Multi-Machine
+```bash
+# Recommended settings for synced vaults
+export OBSIDIAN_INCREMENTAL_UPDATE=true    # Enable smart updates
+export OBSIDIAN_AUTO_REBUILD_INDEX=true    # Auto-rebuild if needed
+export OBSIDIAN_WATCH_CHANGES=true         # Real-time updates while running
+```
+
 ## Troubleshooting
 
 ### Index Issues
 If search results seem outdated, the server automatically rebuilds the index on startup. You can also delete the index directory to force a complete rebuild.
+
+### Multi-Machine Sync
+- Index files are local to each machine (not synced)
+- Vault content is synced between machines
+- Each machine maintains its own optimized index
 
 ### Permission Issues
 Ensure the server has read access to your Obsidian vault directory.
@@ -223,6 +252,7 @@ For large vaults (>10,000 notes), consider:
 - Reducing `max_results` for faster queries
 - Using more specific search terms
 - Filtering by tags to narrow results
+- Incremental updates are especially beneficial for large vaults
 
 ## License
 

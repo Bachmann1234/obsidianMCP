@@ -32,6 +32,7 @@ Optional environment variables:
 export OBSIDIAN_INDEX_PATH="/path/to/index"  # Default: vault/.obsidian-mcp-index
 export OBSIDIAN_MAX_RESULTS=50               # Default: 50
 export OBSIDIAN_AUTO_REBUILD_INDEX=true      # Default: true
+export OBSIDIAN_INCREMENTAL_UPDATE=true      # Default: true
 export OBSIDIAN_WATCH_CHANGES=true           # Default: true
 export OBSIDIAN_INCLUDE_CONTENT=true         # Default: true
 ```
@@ -50,6 +51,7 @@ export OBSIDIAN_INCLUDE_CONTENT=true         # Default: true
 - Frontmatter and tag extraction/indexing
 - Wikilink parsing (`[[note]]` syntax)
 - Real-time file watching and index updates
+- **Intelligent incremental updates** - perfect for multi-machine sync
 - No Obsidian plugins required (direct filesystem access)
 
 ## Common Commands
@@ -136,8 +138,12 @@ Add to `~/.config/claude_desktop_config.json`:
 - `created_date`/`modified_date`: File timestamps
 - `frontmatter`: Serialized frontmatter data
 
-### File Watching
-The watcher monitors vault changes and incrementally updates the search index:
+### File Watching & Incremental Updates
+The server intelligently manages index updates:
+- **Startup**: Compares file modification times vs index age
+- **Incremental update**: Only re-indexes changed files (fast!)
+- **Real-time watching**: Live updates during server operation
+- **Multi-machine friendly**: Each machine maintains optimized local index
 - File creation/modification: Parse and re-index note
 - File deletion: Remove from index
 - File moves: Remove old path, add new path

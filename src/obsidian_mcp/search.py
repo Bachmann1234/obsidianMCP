@@ -1,5 +1,6 @@
 """Whoosh-based search index for Obsidian notes."""
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,8 @@ from whoosh.searching import Results
 from whoosh.writing import IndexWriter
 
 from .parser import ObsidianNote
+
+logger = logging.getLogger(__name__)
 
 
 class SearchResult:
@@ -224,5 +227,82 @@ class ObsidianSearchIndex:
             return {
                 'doc_count': searcher.doc_count(),
                 'field_names': list(self._index.schema.names()),
-                'index_path': str(self.index_path)
+                'index_path': str(self.index_path),
+                'last_modified': self._get_index_last_modified()
             }
+    
+    def _get_index_last_modified(self) -> Optional[str]:
+        """Get the last modification time of the index."""
+        try:
+            # Check modification time of the main index file
+            index_files = list(self.index_path.glob("*"))
+            if index_files:
+                latest_mtime = max(f.stat().st_mtime for f in index_files)
+                return datetime.fromtimestamp(latest_mtime).isoformat()
+        except Exception:
+            pass
+        return None
+    
+    def needs_update(self, vault_path: Path) -> bool:
+        """Check if index needs updating based on file modification times."""
+        try:
+            # Get index last modified time
+            index_mtime = self._get_index_last_modified()
+            if not index_mtime:
+                return True  # No index exists
+            
+            index_dt = datetime.fromisoformat(index_mtime)
+            
+            # Check if any markdown files are newer than the index
+            for md_file in vault_path.rglob('*.md'):
+                if '.obsidian' in md_file.parts:
+                    continue
+                
+                file_mtime = datetime.fromtimestamp(md_file.stat().st_mtime)
+                if file_mtime > index_dt:
+                    return True
+            
+            return False
+        except Exception:
+            return True  # Err on the side of caution
+    
+    def incremental_update(self, vault_path: Path, parser) -> Dict[str, int]:
+        """Perform incremental update of files newer than index."""
+        stats = {'updated': 0, 'added': 0, 'removed': 0}
+        
+        try:
+            index_mtime_str = self._get_index_last_modified()
+            if not index_mtime_str:
+                return stats
+            
+            index_dt = datetime.fromisoformat(index_mtime_str)
+            
+            # Find files that need updating
+            files_to_update = []
+            for md_file in vault_path.rglob('*.md'):
+                if '.obsidian' in md_file.parts:
+                    continue
+                
+                file_mtime = datetime.fromtimestamp(md_file.stat().st_mtime)
+                if file_mtime > index_dt:
+                    files_to_update.append(md_file)
+            
+            # Update modified files
+            for file_path in files_to_update:
+                note = parser.parse_note(file_path)
+                if note:
+                    # Check if note already exists in index
+                    existing = self.get_note_by_path(file_path)
+                    if existing:
+                        stats['updated'] += 1
+                    else:
+                        stats['added'] += 1
+                    
+                    self.add_note(note)
+            
+            # TODO: Handle removed files (would need to track indexed files)
+            
+        except Exception as e:
+            logger.error(f"Error during incremental update: {e}")
+        
+        return stats

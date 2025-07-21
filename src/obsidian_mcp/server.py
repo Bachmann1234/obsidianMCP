@@ -363,7 +363,26 @@ class ObsidianMCPServer:
         logger.info("Initializing search index...")
         
         try:
-            # Discover all notes
+            # Check if we can do incremental update instead of full rebuild
+            if self.search_index.needs_update(self.config.vault_path):
+                logger.info("Index needs updating - checking for incremental update...")
+                
+                # Try incremental update first
+                stats = self.search_index.incremental_update(
+                    self.config.vault_path, 
+                    self.parser
+                )
+                
+                if stats['updated'] > 0 or stats['added'] > 0:
+                    logger.info(f"Incremental update completed: {stats}")
+                    return
+                else:
+                    logger.info("Performing full index rebuild...")
+            else:
+                logger.info("Index is up to date")
+                return
+            
+            # Full rebuild if incremental update wasn't sufficient
             note_paths = self.parser.discover_notes()
             logger.info(f"Found {len(note_paths)} notes to index")
             
