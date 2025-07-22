@@ -2,57 +2,57 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Self
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ServerConfig(BaseModel):
     """Configuration for the Obsidian MCP Server."""
-    
-    vault_path: Path = Field(
-        description="Path to the Obsidian vault directory"
-    )
+
+    vault_path: Path = Field(description="Path to the Obsidian vault directory")
     index_path: Optional[Path] = Field(
         default=None,
-        description="Path to store the search index (defaults to vault_path/.obsidian-mcp-index)"
+        description="Path to store the search index (defaults to vault_path/.obsidian-mcp-index)",
+        validate_default=True,
     )
     max_results: int = Field(
-        default=50,
-        description="Maximum number of search results to return"
+        default=50, description="Maximum number of search results to return"
     )
     auto_rebuild_index: bool = Field(
         default=True,
-        description="Whether to automatically rebuild index on startup if needed"
+        description="Whether to automatically rebuild index on startup if needed",
     )
     incremental_update: bool = Field(
         default=True,
-        description="Whether to use incremental updates when possible instead of full rebuild"
+        description="Whether to use incremental updates when possible instead of full rebuild",
     )
     watch_for_changes: bool = Field(
         default=True,
-        description="Whether to watch for file changes and update index incrementally"
+        description="Whether to watch for file changes and update index incrementally",
     )
     include_content_in_search: bool = Field(
         default=True,
-        description="Whether to include full note content in search results"
+        description="Whether to include full note content in search results",
     )
     embedding_model: str = Field(
         default="all-MiniLM-L6-v2",
-        description="SentenceTransformers model name for generating embeddings"
+        description="SentenceTransformers model name for generating embeddings",
     )
     vector_index_path: Optional[Path] = Field(
         default=None,
-        description="Path to store the vector index (defaults to vault_path/.obsidian-vector-index)"
+        description="Path to store the vector index (defaults to vault_path/.obsidian-vector-index)",
+        validate_default=True,
     )
     hybrid_alpha: float = Field(
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Weight for combining text and vector search (0.0 = text only, 1.0 = vector only)"
+        description="Weight for combining text and vector search (0.0 = text only, 1.0 = vector only)",
     )
-    
-    @validator("vault_path")
+
+    @field_validator("vault_path")
+    @classmethod
     def vault_path_must_exist(cls, v: Path) -> Path:
         """Validate that vault path exists and is a directory."""
         if not v.exists():
@@ -60,64 +60,65 @@ class ServerConfig(BaseModel):
         if not v.is_dir():
             raise ValueError(f"Vault path is not a directory: {v}")
         return v.resolve()
-    
-    @validator("index_path", always=True)
-    def set_default_index_path(cls, v: Optional[Path], values: dict) -> Path:
-        """Set default index path if not provided."""
-        if v is None:
-            vault_path = values.get("vault_path")
-            if vault_path:
-                return vault_path / ".obsidian-mcp-index"
-        return v.resolve() if v else Path.cwd() / ".obsidian-mcp-index"
-    
-    @validator("vector_index_path", always=True)
-    def set_default_vector_index_path(cls, v: Optional[Path], values: dict) -> Path:
-        """Set default vector index path if not provided."""
-        if v is None:
-            vault_path = values.get("vault_path")
-            if vault_path:
-                return vault_path / ".obsidian-vector-index"
-        return v.resolve() if v else Path.cwd() / ".obsidian-vector-index"
+
+    @model_validator(mode="after")
+    def set_default_paths(self) -> Self:
+        """Set default index and vector index paths if not provided."""
+        if self.index_path is None:
+            object.__setattr__(
+                self, "index_path", self.vault_path / ".obsidian-mcp-index"
+            )
+        else:
+            object.__setattr__(self, "index_path", self.index_path.resolve())
+
+        if self.vector_index_path is None:
+            object.__setattr__(
+                self, "vector_index_path", self.vault_path / ".obsidian-vector-index"
+            )
+        else:
+            object.__setattr__(
+                self, "vector_index_path", self.vector_index_path.resolve()
+            )
+
+        return self
 
 
 def load_config_from_env() -> ServerConfig:
     """Load configuration from environment variables."""
     vault_path = os.getenv("OBSIDIAN_VAULT_PATH")
     if not vault_path:
-        raise ValueError(
-            "OBSIDIAN_VAULT_PATH environment variable must be set"
-        )
-    
-    config_data = {
+        raise ValueError("OBSIDIAN_VAULT_PATH environment variable must be set")
+
+    kwargs = {
         "vault_path": Path(vault_path),
     }
-    
+
     # Optional environment variables
     if index_path := os.getenv("OBSIDIAN_INDEX_PATH"):
-        config_data["index_path"] = Path(index_path)
-    
+        kwargs["index_path"] = Path(index_path)
+
     if max_results := os.getenv("OBSIDIAN_MAX_RESULTS"):
-        config_data["max_results"] = int(max_results)
-    
+        kwargs["max_results"] = int(max_results)
+
     if auto_rebuild := os.getenv("OBSIDIAN_AUTO_REBUILD_INDEX"):
-        config_data["auto_rebuild_index"] = auto_rebuild.lower() == "true"
-    
+        kwargs["auto_rebuild_index"] = auto_rebuild.lower() == "true"
+
     if watch_changes := os.getenv("OBSIDIAN_WATCH_CHANGES"):
-        config_data["watch_for_changes"] = watch_changes.lower() == "true"
-    
+        kwargs["watch_for_changes"] = watch_changes.lower() == "true"
+
     if include_content := os.getenv("OBSIDIAN_INCLUDE_CONTENT"):
-        config_data["include_content_in_search"] = include_content.lower() == "true"
-    
+        kwargs["include_content_in_search"] = include_content.lower() == "true"
+
     if incremental := os.getenv("OBSIDIAN_INCREMENTAL_UPDATE"):
-        config_data["incremental_update"] = incremental.lower() == "true"
-    
+        kwargs["incremental_update"] = incremental.lower() == "true"
+
     if embedding_model := os.getenv("OBSIDIAN_EMBEDDING_MODEL"):
-        config_data["embedding_model"] = embedding_model
-    
+        kwargs["embedding_model"] = embedding_model
+
     if vector_index_path := os.getenv("OBSIDIAN_VECTOR_INDEX_PATH"):
-        config_data["vector_index_path"] = Path(vector_index_path)
-    
+        kwargs["vector_index_path"] = Path(vector_index_path)
+
     if hybrid_alpha := os.getenv("OBSIDIAN_HYBRID_ALPHA"):
-        config_data["hybrid_alpha"] = float(hybrid_alpha)
-    
-    return ServerConfig(**config_data)
+        kwargs["hybrid_alpha"] = float(hybrid_alpha)
+
+    return ServerConfig(**kwargs)
