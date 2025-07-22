@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from .config import ServerConfig, load_config_from_env
 from .parser import ObsidianParser
-from .search import ObsidianSearchIndex
+from .search import HybridSearchEngine
 from .watcher import VaultWatcherManager
 
 
@@ -40,7 +40,7 @@ class ObsidianMCPServer:
         """Initialize the server with configuration."""
         self.config = config
         self.parser = ObsidianParser(config.vault_path)
-        self.search_index = ObsidianSearchIndex(config.index_path)
+        self.search_index = HybridSearchEngine(config)
         self.watcher = VaultWatcherManager(
             vault_path=config.vault_path,
             parser=self.parser,
@@ -147,6 +147,44 @@ class ObsidianMCPServer:
                         "type": "object",
                         "properties": {}
                     }
+                ),
+                Tool(
+                    name="semantic_search",
+                    description="Search notes using semantic/vector similarity",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query string"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of results (default: 10)",
+                                "default": 10
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                ),
+                Tool(
+                    name="find_similar_notes",
+                    description="Find notes similar to a given note",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "note_path": {
+                                "type": "string",
+                                "description": "Path to the reference note (relative to vault)"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of results (default: 10)",
+                                "default": 10
+                            }
+                        },
+                        "required": ["note_path"]
+                    }
                 )
             ]
         
@@ -166,6 +204,10 @@ class ObsidianMCPServer:
                     return await self._search_by_tag(arguments)
                 elif name == "get_vault_stats":
                     return await self._get_vault_stats(arguments)
+                elif name == "semantic_search":
+                    return await self._semantic_search(arguments)
+                elif name == "find_similar_notes":
+                    return await self._find_similar_notes(arguments)
                 else:
                     raise McpError(f"Unknown tool: {name}")
             except Exception as e:
@@ -201,6 +243,78 @@ class ObsidianMCPServer:
                 response_parts.append(f"   Tags: {', '.join(result['tags'])}")
             
             response_parts.append(f"   Score: {result['score']:.2f}")
+            
+            # Add content preview
+            content_preview = result['content'][:300]
+            if len(result['content']) > 300:
+                content_preview += "..."
+            response_parts.append(f"   Preview: {content_preview}")
+            response_parts.append("")
+        
+        return [TextContent(type="text", text="\n".join(response_parts))]
+    
+    async def _semantic_search(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Perform pure semantic/vector search."""
+        query = arguments.get("query", "")
+        limit = min(arguments.get("limit", 10), self.config.max_results)
+        
+        if not query.strip():
+            return [TextContent(type="text", text="Empty search query")]
+        
+        results = self.search_index.semantic_search(query, limit)
+        
+        if not results:
+            return [TextContent(type="text", text=f"No semantically similar results found for: {query}")]
+        
+        response_parts = [f"Found {len(results)} semantically similar results for '{query}':\n"]
+        
+        for i, result in enumerate(results, 1):
+            response_parts.append(f"{i}. **{result['title']}**")
+            response_parts.append(f"   Path: {result['path']}")
+            
+            if result['tags']:
+                response_parts.append(f"   Tags: {', '.join(result['tags'])}")
+            
+            response_parts.append(f"   Similarity: {result.get('similarity_score', 0):.3f}")
+            
+            # Add content preview
+            content_preview = result['content'][:300]
+            if len(result['content']) > 300:
+                content_preview += "..."
+            response_parts.append(f"   Preview: {content_preview}")
+            response_parts.append("")
+        
+        return [TextContent(type="text", text="\n".join(response_parts))]
+    
+    async def _find_similar_notes(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Find notes similar to a given note."""
+        note_path = arguments.get("note_path", "")
+        limit = min(arguments.get("limit", 10), self.config.max_results)
+        
+        if not note_path:
+            return [TextContent(type="text", text="Note path is required")]
+        
+        # Convert to absolute path if needed
+        if not note_path.startswith(str(self.config.vault_path)):
+            full_path = str(self.config.vault_path / note_path)
+        else:
+            full_path = note_path
+        
+        results = self.search_index.find_similar_notes(full_path, limit)
+        
+        if not results:
+            return [TextContent(type="text", text=f"No similar notes found for: {note_path}")]
+        
+        response_parts = [f"Found {len(results)} notes similar to '{note_path}':\n"]
+        
+        for i, result in enumerate(results, 1):
+            response_parts.append(f"{i}. **{result['title']}**")
+            response_parts.append(f"   Path: {result['path']}")
+            
+            if result['tags']:
+                response_parts.append(f"   Tags: {', '.join(result['tags'])}")
+            
+            response_parts.append(f"   Similarity: {result.get('similarity_score', 0):.3f}")
             
             # Add content preview
             content_preview = result['content'][:300]

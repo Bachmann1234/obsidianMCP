@@ -37,6 +37,20 @@ class ServerConfig(BaseModel):
         default=True,
         description="Whether to include full note content in search results"
     )
+    embedding_model: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="SentenceTransformers model name for generating embeddings"
+    )
+    vector_index_path: Optional[Path] = Field(
+        default=None,
+        description="Path to store the vector index (defaults to vault_path/.obsidian-vector-index)"
+    )
+    hybrid_alpha: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Weight for combining text and vector search (0.0 = text only, 1.0 = vector only)"
+    )
     
     @validator("vault_path")
     def vault_path_must_exist(cls, v: Path) -> Path:
@@ -55,6 +69,15 @@ class ServerConfig(BaseModel):
             if vault_path:
                 return vault_path / ".obsidian-mcp-index"
         return v.resolve() if v else Path.cwd() / ".obsidian-mcp-index"
+    
+    @validator("vector_index_path", always=True)
+    def set_default_vector_index_path(cls, v: Optional[Path], values: dict) -> Path:
+        """Set default vector index path if not provided."""
+        if v is None:
+            vault_path = values.get("vault_path")
+            if vault_path:
+                return vault_path / ".obsidian-vector-index"
+        return v.resolve() if v else Path.cwd() / ".obsidian-vector-index"
 
 
 def load_config_from_env() -> ServerConfig:
@@ -87,5 +110,14 @@ def load_config_from_env() -> ServerConfig:
     
     if incremental := os.getenv("OBSIDIAN_INCREMENTAL_UPDATE"):
         config_data["incremental_update"] = incremental.lower() == "true"
+    
+    if embedding_model := os.getenv("OBSIDIAN_EMBEDDING_MODEL"):
+        config_data["embedding_model"] = embedding_model
+    
+    if vector_index_path := os.getenv("OBSIDIAN_VECTOR_INDEX_PATH"):
+        config_data["vector_index_path"] = Path(vector_index_path)
+    
+    if hybrid_alpha := os.getenv("OBSIDIAN_HYBRID_ALPHA"):
+        config_data["hybrid_alpha"] = float(hybrid_alpha)
     
     return ServerConfig(**config_data)

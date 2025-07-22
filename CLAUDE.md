@@ -120,16 +120,25 @@ Add to `~/.config/claude_desktop_config.json`:
 
 ## Available MCP Tools
 
-1. **search_notes**: Full-text search with optional tag filtering
-2. **get_note**: Retrieve specific note by path or title
-3. **list_recent_notes**: Get recently modified notes
-4. **get_all_tags**: List all available tags
-5. **search_by_tag**: Find notes with specific tags
-6. **get_vault_stats**: Get vault and index statistics
+1. **search_notes**: Hybrid search (text + semantic) with optional tag filtering and search mode selection
+2. **semantic_search**: Pure semantic/vector similarity search
+3. **find_similar_notes**: Find notes similar to a given reference note
+4. **get_note**: Retrieve specific note by path or title
+5. **list_recent_notes**: Get recently modified notes
+6. **get_all_tags**: List all available tags
+7. **search_by_tag**: Find notes with specific tags
+8. **get_vault_stats**: Get vault and index statistics (now includes vector search stats)
 
 ## Implementation Notes
 
+### Hybrid Search Architecture
+The server now implements hybrid search combining:
+- **Text Search**: Whoosh-based full-text search for exact keyword matching
+- **Vector Search**: ChromaDB + SentenceTransformers for semantic similarity
+- **Fusion**: Reciprocal Rank Fusion (RRF) combines results from both approaches
+
 ### Search Index Schema
+**Text Index (Whoosh)**:
 - `path`: Unique note file path
 - `title`: Note title (from frontmatter, H1, or filename)
 - `content`: Full note content
@@ -137,6 +146,11 @@ Add to `~/.config/claude_desktop_config.json`:
 - `wikilinks`: Comma-separated wikilinks
 - `created_date`/`modified_date`: File timestamps
 - `frontmatter`: Serialized frontmatter data
+
+**Vector Index (ChromaDB)**:
+- Document embeddings generated using SentenceTransformers
+- Metadata includes path, title, tags, dates
+- Cosine similarity for semantic search
 
 ### File Watching & Incremental Updates
 The server intelligently manages index updates:

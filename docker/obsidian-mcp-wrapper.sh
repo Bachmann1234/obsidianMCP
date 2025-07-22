@@ -18,10 +18,14 @@ fi
 exec docker run -i --rm \
   -e OBSIDIAN_VAULT_PATH=/vault \
   -e OBSIDIAN_INDEX_PATH=/app/index \
+  -e OBSIDIAN_VECTOR_INDEX_PATH=/app/vector-index \
   -e OBSIDIAN_MAX_RESULTS=50 \
   -e OBSIDIAN_AUTO_REBUILD_INDEX=true \
   -e OBSIDIAN_WATCH_CHANGES=true \
   -e OBSIDIAN_INCLUDE_CONTENT=true \
+  -e OBSIDIAN_EMBEDDING_MODEL=all-MiniLM-L6-v2 \
+  -e OBSIDIAN_HYBRID_ALPHA=0.5 \
   -v "$VAULT_PATH":/vault:ro \
   -v obsidian-mcp-index:/app/index \
+  -v obsidian-mcp-vector-index:/app/vector-index \
   "$DOCKER_IMAGE"

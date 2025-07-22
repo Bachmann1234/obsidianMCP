@@ -27,6 +27,9 @@ dependencies = [
     "watchdog>=3.0.0",
     "pydantic>=2.5.0",
     "click>=8.0.0",
+    "sentence-transformers>=2.2.0",
+    "chromadb>=0.4.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +61,7 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

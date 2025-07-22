@@ -8,7 +8,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .parser import ObsidianParser
-from .search import ObsidianSearchIndex
+from .search import HybridSearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class VaultWatcher(FileSystemEventHandler):
         self,
         vault_path: Path,
         parser: ObsidianParser,
-        search_index: ObsidianSearchIndex,
+        search_index: HybridSearchEngine,
         on_change_callback: Optional[Callable] = None
     ):
         """Initialize the vault watcher."""
@@ -136,7 +136,7 @@ class VaultWatcherManager:
         self,
         vault_path: Path,
         parser: ObsidianParser,
-        search_index: ObsidianSearchIndex,
+        search_index: HybridSearchEngine,
         enabled: bool = True
     ):
         """Initialize the watcher manager."""

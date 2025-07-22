@@ -6,5 +6,10 @@ watchdog>=3.0.0
 pydantic>=2.5.0
 click>=8.0.0
 
+# Vector search dependencies
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+numpy>=1.24.0
+
 # Testing dependencies (minimal for basic functionality)
 pytest>=7.0.0
