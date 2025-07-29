@@ -413,7 +413,7 @@ class ObsidianSearchIndex:
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the index."""
         try:
-            with self._index.writer() as writer:  # type: ignore[union-attr]  # type: ignore[union-attr]
+            with self._index.writer() as writer:  # type: ignore[union-attr]
                 writer.update_document(
                     path=str(note.path),
                     title=note.title,
@@ -429,7 +429,7 @@ class ObsidianSearchIndex:
             # Try to recover and retry once
             if self._recover_from_corruption():
                 logger.info(f"Retrying add_note for {note.path} after recovery")
-                with self._index.writer() as writer:  # type: ignore[union-attr]  # type: ignore[union-attr]
+                with self._index.writer() as writer:  # type: ignore[union-attr]
                     writer.update_document(
                         path=str(note.path),
                         title=note.title,

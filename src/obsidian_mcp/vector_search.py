@@ -62,8 +62,7 @@ class VectorSearchEngine:
 
     def _generate_doc_id(self, note_path: str) -> str:
         """Generate a unique document ID from note path."""
-        path_str = str(note_path) if hasattr(note_path, "__fspath__") else note_path
-        return hashlib.md5(path_str.encode()).hexdigest()
+        return hashlib.md5(note_path.encode()).hexdigest()
 
     def _prepare_text_for_embedding(self, note: ObsidianNote) -> str:
         """Prepare note text for embedding generation."""

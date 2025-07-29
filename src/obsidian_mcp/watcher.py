@@ -73,7 +73,7 @@ class VaultWatcher(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        file_path = Path(event.src_path)
+        file_path = Path(str(event.src_path))
         if self._should_process_file(file_path):
             logger.info(f"File created: {file_path}")
             self._update_note(file_path)
@@ -83,7 +83,7 @@ class VaultWatcher(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        file_path = Path(event.src_path)
+        file_path = Path(str(event.src_path))
         if self._should_process_file(file_path):
             logger.info(f"File modified: {file_path}")
             self._update_note(file_path)
@@ -93,7 +93,7 @@ class VaultWatcher(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        file_path = Path(event.src_path)
+        file_path = Path(str(event.src_path))
         if self._should_process_file(file_path):
             logger.info(f"File deleted: {file_path}")
             self.search_index.remove_note(file_path)
@@ -106,8 +106,8 @@ class VaultWatcher(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        old_path = Path(event.src_path)
-        new_path = Path(getattr(event, "dest_path", ""))
+        old_path = Path(str(event.src_path))
+        new_path = Path(str(getattr(event, "dest_path", "")))
 
         if self._should_process_file(old_path):
             logger.info(f"File moved: {old_path} -> {new_path}")
