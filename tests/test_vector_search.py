@@ -1,16 +1,16 @@
 """Tests for the vector search module."""
 
-import tempfile
-from pathlib import Path
-from datetime import datetime
-from unittest.mock import patch, Mock, MagicMock
 import json
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 
-import pytest
 import numpy as np
+import pytest
 
-from obsidian_mcp.vector_search import VectorSearchEngine
 from obsidian_mcp.parser import ObsidianNote
+from obsidian_mcp.vector_search import VectorSearchEngine
 
 
 @pytest.fixture

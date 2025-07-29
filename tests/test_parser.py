@@ -1,13 +1,13 @@
 """Tests for the Obsidian parser module."""
 
 import tempfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from obsidian_mcp.parser import ObsidianParser, ObsidianNote
+from obsidian_mcp.parser import ObsidianNote, ObsidianParser
 
 
 @pytest.fixture

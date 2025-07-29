@@ -535,8 +535,9 @@ class TestServerMain:
             mock_server = Mock()
             mock_server_class.return_value = mock_server
 
-            from obsidian_mcp.server import main
             from click.testing import CliRunner
+
+            from obsidian_mcp.server import main
 
             runner = CliRunner()
             result = runner.invoke(main, ["--vault-path", str(temp_vault)])
@@ -556,8 +557,9 @@ class TestServerMain:
             mock_server = Mock()
             mock_server_class.return_value = mock_server
 
-            from obsidian_mcp.server import main
             from click.testing import CliRunner
+
+            from obsidian_mcp.server import main
 
             runner = CliRunner()
             result = runner.invoke(main, [])
@@ -577,8 +579,9 @@ class TestServerMain:
             mock_server = Mock()
             mock_server_class.return_value = mock_server
 
-            from obsidian_mcp.server import main
             from click.testing import CliRunner
+
+            from obsidian_mcp.server import main
 
             runner = CliRunner()
             result = runner.invoke(

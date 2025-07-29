@@ -1,16 +1,16 @@
 """Tests for the hybrid search functionality."""
 
 import tempfile
-from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, Mock, MagicMock
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any, Dict, List
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from obsidian_mcp.search import HybridSearchEngine, SearchResult
-from obsidian_mcp.parser import ObsidianNote
 from obsidian_mcp.config import ServerConfig
+from obsidian_mcp.parser import ObsidianNote
+from obsidian_mcp.search import HybridSearchEngine, SearchResult
 
 
 @pytest.fixture

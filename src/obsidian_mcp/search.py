@@ -9,11 +9,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from whoosh import fields, index
 from whoosh.filedb.filestore import FileStorage
+from whoosh.index import EmptyIndexError, IndexError, LockError
 from whoosh.qparser import MultifieldParser, QueryParser
 from whoosh.query import Query
 from whoosh.searching import Results
 from whoosh.writing import IndexWriter
-from whoosh.index import IndexError, EmptyIndexError, LockError
 
 from .config import ServerConfig
 from .parser import ObsidianNote
@@ -502,46 +502,46 @@ class ObsidianSearchIndex:
                         )
                         parsed_query = And([parsed_query, tag_query])
 
-            # Execute search
-            results = searcher.search(parsed_query, limit=limit)
+                # Execute search
+                results = searcher.search(parsed_query, limit=limit)
 
-            # Convert to our format
-            search_results = []
-            for result in results:
-                # Get highlights - this is a method that needs to be called
-                highlights = {}
-                try:
-                    if hasattr(result, "highlights"):
-                        highlights = dict(result.highlights())
-                except:
+                # Convert to our format
+                search_results = []
+                for result in results:
+                    # Get highlights - this is a method that needs to be called
                     highlights = {}
+                    try:
+                        if hasattr(result, "highlights"):
+                            highlights = dict(result.highlights())
+                    except:
+                        highlights = {}
 
-                search_results.append(
-                    {
-                        "path": result["path"],
-                        "title": result["title"],
-                        "content": (
-                            result["content"][:500] + "..."
-                            if len(result["content"]) > 500
-                            else result["content"]
-                        ),
-                        "tags": result["tags"].split(",") if result["tags"] else [],
-                        "score": result.score,
-                        "highlights": highlights,
-                        "created_date": (
-                            result["created_date"].isoformat()
-                            if result["created_date"]
-                            else None
-                        ),
-                        "modified_date": (
-                            result["modified_date"].isoformat()
-                            if result["modified_date"]
-                            else None
-                        ),
-                    }
-                )
+                    search_results.append(
+                        {
+                            "path": result["path"],
+                            "title": result["title"],
+                            "content": (
+                                result["content"][:500] + "..."
+                                if len(result["content"]) > 500
+                                else result["content"]
+                            ),
+                            "tags": result["tags"].split(",") if result["tags"] else [],
+                            "score": result.score,
+                            "highlights": highlights,
+                            "created_date": (
+                                result["created_date"].isoformat()
+                                if result["created_date"]
+                                else None
+                            ),
+                            "modified_date": (
+                                result["modified_date"].isoformat()
+                                if result["modified_date"]
+                                else None
+                            ),
+                        }
+                    )
 
-            return search_results
+                return search_results
         except (IndexError, LockError) as e:
             logger.error(f"Search failed due to index corruption: {e}")
             # Try to recover and return empty results rather than crashing
