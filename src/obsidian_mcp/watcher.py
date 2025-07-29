@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -22,7 +22,7 @@ class VaultWatcher(FileSystemEventHandler):
         vault_path: Path,
         parser: ObsidianParser,
         search_index: HybridSearchEngine,
-        on_change_callback: Optional[Callable] = None,
+        on_change_callback: Optional[Callable[..., None]] = None,
         use_polling: bool = False,
     ):
         """Initialize the vault watcher.
@@ -39,7 +39,7 @@ class VaultWatcher(FileSystemEventHandler):
         self.search_index = search_index
         self.on_change_callback = on_change_callback
         self.use_polling = use_polling
-        self.observer: Optional[Observer] = None
+        self.observer: Optional[Any] = None  # Observer type not available
 
     def start_watching(self) -> None:
         """Start watching the vault for changes."""
@@ -56,8 +56,8 @@ class VaultWatcher(FileSystemEventHandler):
             self.observer = Observer()
             logger.info("Using native OS file watcher")
 
-        self.observer.schedule(self, str(self.vault_path), recursive=True)
-        self.observer.start()
+        self.observer.schedule(self, str(self.vault_path), recursive=True)  # type: ignore[no-untyped-call]
+        self.observer.start()  # type: ignore[no-untyped-call]
         logger.info(f"Started watching vault at {self.vault_path}")
 
     def stop_watching(self) -> None:
@@ -107,7 +107,7 @@ class VaultWatcher(FileSystemEventHandler):
             return
 
         old_path = Path(event.src_path)
-        new_path = Path(event.dest_path)
+        new_path = Path(getattr(event, "dest_path", ""))
 
         if self._should_process_file(old_path):
             logger.info(f"File moved: {old_path} -> {new_path}")
@@ -214,7 +214,7 @@ class VaultWatcherManager:
             self.watcher = None
             logger.info("Vault watcher stopped")
 
-    def _on_change(self, action: str, *args) -> None:
+    def _on_change(self, action: str, *args: Any) -> None:
         """Handle file change events and update statistics."""
         if action == "updated":
             self.stats["files_updated"] += 1
@@ -225,7 +225,7 @@ class VaultWatcherManager:
 
         logger.debug(f"Vault change: {action} - {args}")
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get watcher statistics."""
         return {
             "enabled": self.enabled,
@@ -233,11 +233,11 @@ class VaultWatcherManager:
             **self.stats,
         }
 
-    def __enter__(self):
+    def __enter__(self) -> Any:
         """Context manager entry."""
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.stop()

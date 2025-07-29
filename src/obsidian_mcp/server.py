@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import click
 from mcp import McpError
@@ -58,7 +58,7 @@ class ObsidianMCPServer:
     def _setup_tools(self) -> None:
         """Setup MCP tools."""
 
-        @self.server.list_tools()
+        @self.server.list_tools()  # type: ignore[no-untyped-call]
         async def list_tools() -> List[Tool]:
             """List available tools."""
             return [
@@ -184,7 +184,7 @@ class ObsidianMCPServer:
                 ),
             ]
 
-        @self.server.call_tool()
+        @self.server.call_tool()  # type: ignore[no-untyped-call]
         async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls."""
             try:
@@ -462,7 +462,7 @@ class ObsidianMCPServer:
             file_list = ""
             if vault_notes:
 
-                def format_note_path(note):
+                def format_note_path(note: Union[Path, str]) -> str:
                     if hasattr(note, "relative_to"):
                         # It's a Path object
                         return str(note.relative_to(self.config.vault_path))
@@ -590,7 +590,7 @@ class ObsidianMCPServer:
                 initialization_options = InitializationOptions(
                     server_name="obsidian-mcp-server",
                     server_version="0.1.0",
-                    capabilities=ServerCapabilities(tools={}),
+                    capabilities=ServerCapabilities(),
                 )
                 await self.server.run(read_stream, write_stream, initialization_options)
         finally:
@@ -598,16 +598,16 @@ class ObsidianMCPServer:
             self.watcher.stop()
 
 
-@click.command()
-@click.option(
+@click.command()  # type: ignore[attr-defined]
+@click.option(  # type: ignore[attr-defined]
     "--vault-path",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),  # type: ignore[attr-defined]
     help="Path to Obsidian vault directory",
 )
-@click.option(
-    "--index-path", type=click.Path(path_type=Path), help="Path to store search index"
+@click.option(  # type: ignore[attr-defined]
+    "--index-path", type=click.Path(path_type=Path), help="Path to store search index"  # type: ignore[attr-defined]
 )
-@click.option(
+@click.option(  # type: ignore[attr-defined]
     "--max-results", type=int, default=50, help="Maximum number of search results"
 )
 def main(
@@ -619,11 +619,9 @@ def main(
     try:
         # Load configuration
         if vault_path:
-            kwargs = {"vault_path": vault_path}
-            if index_path:
-                kwargs["index_path"] = index_path
-            kwargs["max_results"] = max_results
-            config = ServerConfig(**kwargs)
+            config = ServerConfig(
+                vault_path=vault_path, index_path=index_path, max_results=max_results
+            )
         else:
             config = load_config_from_env()
 

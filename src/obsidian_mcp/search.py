@@ -43,9 +43,13 @@ class HybridSearchEngine:
         self.config = config
 
         # Initialize Whoosh text search
+        if config.index_path is None:
+            raise ValueError("index_path cannot be None")
         self.text_search = ObsidianSearchIndex(config.index_path)
 
         # Initialize vector search
+        if config.vector_index_path is None:
+            raise ValueError("vector_index_path cannot be None")
         self.vector_search = VectorSearchEngine(
             index_path=config.vector_index_path, embedding_model=config.embedding_model
         )
@@ -144,8 +148,8 @@ class HybridSearchEngine:
             Fused and ranked results
         """
         # Create a mapping of document paths to combined scores
-        doc_scores = {}
-        doc_info = {}
+        doc_scores: dict[str, float] = {}
+        doc_info: dict[str, dict[str, Any]] = {}
 
         # Process text search results
         for rank, result in enumerate(text_results):
@@ -245,7 +249,7 @@ class HybridSearchEngine:
         similar_results = self.vector_search.get_similar_notes(note_path, limit)
         return self._format_vector_results(similar_results)
 
-    def get_note_by_path(self, file_path: Path) -> Optional[Dict]:
+    def get_note_by_path(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Get a specific note by its path."""
         return self.text_search.get_note_by_path(file_path)
 
@@ -253,7 +257,7 @@ class HybridSearchEngine:
         """Get all unique tags in the index."""
         return self.text_search.list_all_tags()
 
-    def get_recent_notes(self, limit: int = 10) -> List[Dict]:
+    def get_recent_notes(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recently modified notes."""
         return self.text_search.get_recent_notes(limit)
 
@@ -284,7 +288,7 @@ class HybridSearchEngine:
         """Check if indices need updating."""
         return self.text_search.needs_update(vault_path)
 
-    def incremental_update(self, vault_path: Path, parser) -> Dict[str, int]:
+    def incremental_update(self, vault_path: Path, parser: Any) -> Dict[str, int]:
         """Perform incremental update of both indices."""
         stats = self.text_search.incremental_update(vault_path, parser)
 
@@ -375,7 +379,7 @@ class ObsidianSearchIndex:
     def _validate_index(self) -> None:
         """Validate that the index can be used for basic operations."""
         try:
-            with self._index.searcher() as searcher:
+            with self._index.searcher() as searcher:  # type: ignore[union-attr]
                 # Try to get document count - this will fail if index is corrupted
                 searcher.doc_count()
         except Exception as e:
@@ -409,7 +413,7 @@ class ObsidianSearchIndex:
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the index."""
         try:
-            with self._index.writer() as writer:
+            with self._index.writer() as writer:  # type: ignore[union-attr]  # type: ignore[union-attr]
                 writer.update_document(
                     path=str(note.path),
                     title=note.title,
@@ -425,7 +429,7 @@ class ObsidianSearchIndex:
             # Try to recover and retry once
             if self._recover_from_corruption():
                 logger.info(f"Retrying add_note for {note.path} after recovery")
-                with self._index.writer() as writer:
+                with self._index.writer() as writer:  # type: ignore[union-attr]  # type: ignore[union-attr]
                     writer.update_document(
                         path=str(note.path),
                         title=note.title,
@@ -441,12 +445,12 @@ class ObsidianSearchIndex:
 
     def remove_note(self, file_path: Path) -> None:
         """Remove a note from the index."""
-        with self._index.writer() as writer:
+        with self._index.writer() as writer:  # type: ignore[union-attr]
             writer.delete_by_term("path", str(file_path))
 
     def bulk_add_notes(self, notes: List[ObsidianNote]) -> None:
         """Add multiple notes to the index efficiently."""
-        with self._index.writer() as writer:
+        with self._index.writer() as writer:  # type: ignore[union-attr]
             for note in notes:
                 writer.update_document(
                     path=str(note.path),
@@ -465,7 +469,7 @@ class ObsidianSearchIndex:
         limit: int = 50,
         tags: Optional[Set[str]] = None,
         search_fields: Optional[List[str]] = None,
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """Search the index and return results."""
         if not query.strip():
             return []
@@ -475,23 +479,23 @@ class ObsidianSearchIndex:
             search_fields = ["title", "content", "tags"]
 
         try:
-            with self._index.searcher() as searcher:
+            with self._index.searcher() as searcher:  # type: ignore[union-attr]
                 # Create parser for multi-field search
-                parser = MultifieldParser(search_fields, self._index.schema)
+                parser = MultifieldParser(search_fields, self._index.schema)  # type: ignore[union-attr]
 
                 # Parse the query
                 try:
                     parsed_query = parser.parse(query)
                 except Exception:
                     # Fall back to simple content search if parsing fails
-                    parser = QueryParser("content", self._index.schema)
+                    parser = QueryParser("content", self._index.schema)  # type: ignore[union-attr]
                     parsed_query = parser.parse(query)
 
                 # Add tag filter if specified
                 if tags:
                     tag_queries = []
                     for tag in tags:
-                        tag_parser = QueryParser("tags", self._index.schema)
+                        tag_parser = QueryParser("tags", self._index.schema)  # type: ignore[union-attr]
                         tag_queries.append(tag_parser.parse(tag))
 
                     if tag_queries:
@@ -551,9 +555,9 @@ class ObsidianSearchIndex:
                 )
             return []
 
-    def get_note_by_path(self, file_path: Path) -> Optional[Dict]:
+    def get_note_by_path(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Get a specific note by its path."""
-        with self._index.searcher() as searcher:
+        with self._index.searcher() as searcher:  # type: ignore[union-attr]
             results = searcher.documents(path=str(file_path))
             for result in results:
                 return {
@@ -579,17 +583,17 @@ class ObsidianSearchIndex:
 
     def list_all_tags(self) -> List[str]:
         """Get all unique tags in the index."""
-        tags = set()
-        with self._index.searcher() as searcher:
+        tags: set[str] = set()
+        with self._index.searcher() as searcher:  # type: ignore[union-attr]
             for fields in searcher.all_stored_fields():
                 if fields.get("tags"):
                     note_tags = fields["tags"].split(",")
                     tags.update(tag.strip() for tag in note_tags if tag.strip())
         return sorted(list(tags))
 
-    def get_recent_notes(self, limit: int = 10) -> List[Dict]:
+    def get_recent_notes(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recently modified notes."""
-        with self._index.searcher() as searcher:
+        with self._index.searcher() as searcher:  # type: ignore[union-attr]
             results = searcher.documents()
             # Sort by modified date
             sorted_results = sorted(
@@ -623,7 +627,7 @@ class ObsidianSearchIndex:
     def rebuild_index(self, notes: List[ObsidianNote]) -> None:
         """Completely rebuild the search index."""
         # Clear existing index by removing all documents
-        with self._index.writer() as writer:
+        with self._index.writer() as writer:  # type: ignore[union-attr]
             # Truncate the index (remove all documents)
             from whoosh.query import Every
 
@@ -634,15 +638,15 @@ class ObsidianSearchIndex:
 
     def optimize_index(self) -> None:
         """Optimize the index for better performance."""
-        with self._index.writer() as writer:
+        with self._index.writer() as writer:  # type: ignore[union-attr]
             writer.commit(optimize=True)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get index statistics."""
-        with self._index.searcher() as searcher:
+        with self._index.searcher() as searcher:  # type: ignore[union-attr]
             return {
                 "doc_count": searcher.doc_count(),
-                "field_names": list(self._index.schema.names()),
+                "field_names": list(self._index.schema.names()),  # type: ignore[union-attr]
                 "index_path": str(self.index_path),
                 "last_modified": self._get_index_last_modified(),
             }
@@ -682,7 +686,7 @@ class ObsidianSearchIndex:
         except Exception:
             return True  # Err on the side of caution
 
-    def incremental_update(self, vault_path: Path, parser) -> Dict[str, int]:
+    def incremental_update(self, vault_path: Path, parser: Any) -> Dict[str, int]:
         """Perform incremental update of files newer than index."""
         stats = {"updated": 0, "added": 0, "removed": 0}
 

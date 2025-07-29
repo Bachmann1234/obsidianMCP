@@ -3,7 +3,7 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import frontmatter
 from pydantic import BaseModel, ConfigDict
@@ -18,7 +18,7 @@ class ObsidianNote(BaseModel):
     title: str
     content: str
     raw_content: str
-    frontmatter: Dict
+    frontmatter: Dict[str, Any]
     tags: Set[str]
     wikilinks: Set[str]
     backlinks: Set[str]
@@ -87,11 +87,13 @@ class ObsidianParser:
             print(f"Error parsing {file_path}: {e}")
             return None
 
-    def _extract_title(self, file_path: Path, content: str, metadata: Dict) -> str:
+    def _extract_title(
+        self, file_path: Path, content: str, metadata: Dict[str, Any]
+    ) -> str:
         """Extract note title from frontmatter, first heading, or filename."""
         # Check frontmatter for title
         if "title" in metadata:
-            return metadata["title"]
+            return str(metadata["title"])
 
         # Check for first H1 heading
         lines = content.split("\n")
@@ -103,9 +105,9 @@ class ObsidianParser:
         # Fall back to filename without extension
         return file_path.stem
 
-    def _extract_tags(self, content: str, metadata: Dict) -> Set[str]:
+    def _extract_tags(self, content: str, metadata: Dict[str, Any]) -> Set[str]:
         """Extract tags from frontmatter and inline tags."""
-        tags = set()
+        tags: set[str] = set()
 
         # Extract from frontmatter
         if "tags" in metadata:
