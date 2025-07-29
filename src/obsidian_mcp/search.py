@@ -373,7 +373,7 @@ class ObsidianSearchIndex:
                 # Try to get document count - this will fail if index is corrupted
                 searcher.doc_count()
         except Exception as e:
-            logger.warning(f\"Index validation failed: {e}\")
+            logger.warning(f"Index validation failed: {e}")
             raise IndexError(f\"Index validation failed: {e}\")
 
     def _recover_from_corruption(self) -> bool:
