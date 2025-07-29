@@ -367,7 +367,7 @@ class ObsidianSearchIndex:
                 raise
 
     def _validate_index(self) -> None:
-        \"\"\"Validate that the index can be used for basic operations.\"\"\"
+        """Validate that the index can be used for basic operations."""
         try:
             with self._index.searcher() as searcher:
                 # Try to get document count - this will fail if index is corrupted
@@ -377,25 +377,25 @@ class ObsidianSearchIndex:
             raise IndexError(f\"Index validation failed: {e}\")
 
     def _recover_from_corruption(self) -> bool:
-        \"\"\"Attempt to recover from index corruption by removing corrupted files.\"\"\"
+        """Attempt to recover from index corruption by removing corrupted files."""
         try:
-            logger.info(f\"Attempting to recover from index corruption at {self.index_path}\")
+            logger.info(f"Attempting to recover from index corruption at {self.index_path}")
             
             # Remove corrupted index directory
             if self.index_path.exists():
                 shutil.rmtree(self.index_path)
-                logger.info(f\"Removed corrupted index directory: {self.index_path}\")
+                logger.info(f"Removed corrupted index directory: {self.index_path}")
             
             # Recreate directory
             self.index_path.mkdir(parents=True, exist_ok=True)
             
             # Create fresh index
             self._index = index.create_in(str(self.index_path), self.SCHEMA)
-            logger.info(f\"Created fresh index after corruption recovery\")
+            logger.info(f"Created fresh index after corruption recovery")
             return True
             
         except Exception as e:
-            logger.error(f\"Failed to recover from index corruption: {e}\")
+            logger.error(f"Failed to recover from index corruption: {e}")
             return False
 
     def add_note(self, note: ObsidianNote) -> None:
