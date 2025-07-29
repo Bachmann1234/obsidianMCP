@@ -40,7 +40,7 @@ jobs:
         isort --check-only src/ tests/
         
         # Run type checking with mypy
-        # mypy src/
+        mypy src/
         
     - name: Run tests with pytest
       run: |

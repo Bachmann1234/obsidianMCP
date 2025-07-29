@@ -93,39 +93,39 @@ def load_config_from_env() -> ServerConfig:
     if not vault_path:
         raise ValueError("OBSIDIAN_VAULT_PATH environment variable must be set")
 
-    kwargs = {
+    config_kwargs: dict[str, object] = {
         "vault_path": Path(vault_path),
     }
 
     # Optional environment variables
     if index_path := os.getenv("OBSIDIAN_INDEX_PATH"):
-        kwargs["index_path"] = Path(index_path)
+        config_kwargs["index_path"] = Path(index_path)
 
     if max_results := os.getenv("OBSIDIAN_MAX_RESULTS"):
-        kwargs["max_results"] = int(max_results)
+        config_kwargs["max_results"] = int(max_results)
 
     if auto_rebuild := os.getenv("OBSIDIAN_AUTO_REBUILD_INDEX"):
-        kwargs["auto_rebuild_index"] = auto_rebuild.lower() == "true"
+        config_kwargs["auto_rebuild_index"] = auto_rebuild.lower() == "true"
 
     if watch_changes := os.getenv("OBSIDIAN_WATCH_CHANGES"):
-        kwargs["watch_for_changes"] = watch_changes.lower() == "true"
+        config_kwargs["watch_for_changes"] = watch_changes.lower() == "true"
 
     if include_content := os.getenv("OBSIDIAN_INCLUDE_CONTENT"):
-        kwargs["include_content_in_search"] = include_content.lower() == "true"
+        config_kwargs["include_content_in_search"] = include_content.lower() == "true"
 
     if incremental := os.getenv("OBSIDIAN_INCREMENTAL_UPDATE"):
-        kwargs["incremental_update"] = incremental.lower() == "true"
+        config_kwargs["incremental_update"] = incremental.lower() == "true"
 
     if embedding_model := os.getenv("OBSIDIAN_EMBEDDING_MODEL"):
-        kwargs["embedding_model"] = embedding_model
+        config_kwargs["embedding_model"] = embedding_model
 
     if vector_index_path := os.getenv("OBSIDIAN_VECTOR_INDEX_PATH"):
-        kwargs["vector_index_path"] = Path(vector_index_path)
+        config_kwargs["vector_index_path"] = Path(vector_index_path)
 
     if hybrid_alpha := os.getenv("OBSIDIAN_HYBRID_ALPHA"):
-        kwargs["hybrid_alpha"] = float(hybrid_alpha)
+        config_kwargs["hybrid_alpha"] = float(hybrid_alpha)
 
     if use_polling := os.getenv("OBSIDIAN_USE_POLLING_OBSERVER"):
-        kwargs["use_polling_observer"] = use_polling.lower() == "true"
+        config_kwargs["use_polling_observer"] = use_polling.lower() == "true"
 
-    return ServerConfig(**kwargs)
+    return ServerConfig(**config_kwargs)  # type: ignore[arg-type]

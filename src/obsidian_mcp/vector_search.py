@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import chromadb
 import numpy as np
@@ -88,11 +88,11 @@ class VectorSearchEngine:
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the vector index."""
         try:
-            doc_id = self._generate_doc_id(note.path)
+            doc_id = self._generate_doc_id(str(note.path))
             text = self._prepare_text_for_embedding(note)
 
             # Generate embedding
-            embedding = self.embedding_model.encode(text).tolist()
+            embedding = cast(List[float], self.embedding_model.encode(text).tolist())
 
             # Prepare metadata
             metadata = {
@@ -115,8 +115,8 @@ class VectorSearchEngine:
                 # Update existing document
                 self.collection.update(
                     ids=[doc_id],
-                    embeddings=[embedding],
-                    metadatas=[metadata],
+                    embeddings=[embedding],  # type: ignore[arg-type]
+                    metadatas=[metadata],  # type: ignore[list-item]
                     documents=[text],
                 )
                 logger.debug(f"Updated vector for note: {note.path}")
@@ -124,8 +124,8 @@ class VectorSearchEngine:
                 # Add new document
                 self.collection.add(
                     ids=[doc_id],
-                    embeddings=[embedding],
-                    metadatas=[metadata],
+                    embeddings=[embedding],  # type: ignore[arg-type]
+                    metadatas=[metadata],  # type: ignore[list-item]
                     documents=[text],
                 )
                 logger.debug(f"Added vector for note: {note.path}")
@@ -162,7 +162,9 @@ class VectorSearchEngine:
         """
         try:
             # Generate query embedding
-            query_embedding = self.embedding_model.encode(query).tolist()
+            query_embedding = cast(
+                List[float], self.embedding_model.encode(query).tolist()
+            )
 
             # Prepare where clause for tag filtering
             where_clause = None
@@ -173,41 +175,42 @@ class VectorSearchEngine:
 
             # Perform vector search
             results = self.collection.query(
-                query_embeddings=[query_embedding],
+                query_embeddings=[query_embedding],  # type: ignore[arg-type]
                 n_results=min(top_k * 2, 100),  # Get more results for filtering
                 where=where_clause,
             )
 
             # Process and filter results
             processed_results = []
-            for i, doc_id in enumerate(results["ids"][0]):
-                metadata = results["metadatas"][0][i]
-                distance = results["distances"][0][i]
+            if results["ids"] and results["metadatas"] and results["distances"]:
+                for i, doc_id in enumerate(results["ids"][0]):
+                    metadata = results["metadatas"][0][i]
+                    distance = results["distances"][0][i]
 
-                # Convert distance to similarity score (cosine similarity)
-                similarity_score = 1.0 - distance
+                    # Convert distance to similarity score (cosine similarity)
+                    similarity_score = 1.0 - distance
 
-                # Apply tag filtering if specified
-                if tag_filter:
-                    note_tags = json.loads(metadata.get("tags", "[]"))
-                    if not any(tag in note_tags for tag in tag_filter):
-                        continue
+                    # Apply tag filtering if specified
+                    if tag_filter:
+                        note_tags = json.loads(str(metadata.get("tags", "[]")))
+                        if not any(tag in note_tags for tag in tag_filter):
+                            continue
 
-                result = {
-                    "path": metadata["path"],
-                    "title": metadata["title"],
-                    "similarity_score": similarity_score,
-                    "tags": json.loads(metadata.get("tags", "[]")),
-                    "created_date": metadata.get("created_date", ""),
-                    "modified_date": metadata.get("modified_date", ""),
-                    "content_length": metadata.get("content_length", 0),
-                }
+                    result = {
+                        "path": str(metadata["path"]),
+                        "title": str(metadata["title"]),
+                        "similarity_score": similarity_score,
+                        "tags": json.loads(str(metadata.get("tags", "[]"))),
+                        "created_date": str(metadata.get("created_date", "")),
+                        "modified_date": str(metadata.get("modified_date", "")),
+                        "content_length": int(metadata.get("content_length") or 0),
+                    }
 
-                processed_results.append(result)
+                    processed_results.append(result)
 
-                # Stop when we have enough results
-                if len(processed_results) >= top_k:
-                    break
+                    # Stop when we have enough results
+                    if len(processed_results) >= top_k:
+                        break
 
             logger.debug(
                 f"Vector search returned {len(processed_results)} results for query: {query}"
@@ -242,37 +245,41 @@ class VectorSearchEngine:
                 logger.warning(f"Note not found in vector index: {note_path}")
                 return []
 
-            embedding = existing["embeddings"][0]
+            embedding = existing["embeddings"][0] if existing["embeddings"] else None
+            if embedding is None:
+                logger.warning(f"No embedding found for note: {note_path}")
+                return []
 
             # Search for similar notes
             results = self.collection.query(
-                query_embeddings=[embedding],
+                query_embeddings=[embedding],  # type: ignore[arg-type]
                 n_results=top_k + 1,  # +1 to exclude the query note itself
             )
 
             # Process results (exclude the query note itself)
             processed_results = []
-            for i, result_id in enumerate(results["ids"][0]):
-                if result_id == doc_id:
-                    continue  # Skip the query note itself
+            if results["ids"] and results["metadatas"] and results["distances"]:
+                for i, result_id in enumerate(results["ids"][0]):
+                    if result_id == doc_id:
+                        continue  # Skip the query note itself
 
-                metadata = results["metadatas"][0][i]
-                distance = results["distances"][0][i]
-                similarity_score = 1.0 - distance
+                    metadata = results["metadatas"][0][i]
+                    distance = results["distances"][0][i]
+                    similarity_score = 1.0 - distance
 
-                result = {
-                    "path": metadata["path"],
-                    "title": metadata["title"],
-                    "similarity_score": similarity_score,
-                    "tags": json.loads(metadata.get("tags", "[]")),
-                    "created_date": metadata.get("created_date", ""),
-                    "modified_date": metadata.get("modified_date", ""),
-                }
+                    result = {
+                        "path": str(metadata["path"]),
+                        "title": str(metadata["title"]),
+                        "similarity_score": similarity_score,
+                        "tags": json.loads(str(metadata.get("tags", "[]"))),
+                        "created_date": str(metadata.get("created_date", "")),
+                        "modified_date": str(metadata.get("modified_date", "")),
+                    }
 
-                processed_results.append(result)
+                    processed_results.append(result)
 
-                if len(processed_results) >= top_k:
-                    break
+                    if len(processed_results) >= top_k:
+                        break
 
             return processed_results
 
