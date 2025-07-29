@@ -127,4 +127,4 @@ jobs:
         docker run --rm \
           -e OBSIDIAN_VAULT_PATH=/vault \
           -v $(pwd)/test-vault:/vault:ro \
-          obsidian-mcp-server --help
+          obsidian-mcp-server obsidian-mcp-server --help
