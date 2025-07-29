@@ -335,13 +335,13 @@ def test_validate_index_failure():
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
         search_index = ObsidianSearchIndex(index_path)
-        
+
         # Mock the searcher to simulate corruption
-        with patch.object(search_index._index, 'searcher') as mock_searcher_context:
+        with patch.object(search_index._index, "searcher") as mock_searcher_context:
             mock_searcher = Mock()
             mock_searcher.doc_count.side_effect = Exception("Corruption error")
             mock_searcher_context.return_value.__enter__.return_value = mock_searcher
-            
+
             # Should raise IndexError on validation failure
             with pytest.raises(Exception):  # Will be wrapped in IndexError
                 search_index._validate_index()
@@ -351,16 +351,16 @@ def test_recover_from_corruption_success():
     """Test successful corruption recovery."""
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
-        
+
         # Create index first
         search_index = ObsidianSearchIndex(index_path)
         assert index_path.exists()
-        
+
         # Verify recovery works
         result = search_index._recover_from_corruption()
         assert result is True
         assert index_path.exists()  # Should be recreated
-        
+
         # Index should be usable after recovery
         search_index._validate_index()
 
@@ -370,9 +370,12 @@ def test_recover_from_corruption_directory_removal_failure():
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
         search_index = ObsidianSearchIndex(index_path)
-        
+
         # Mock shutil.rmtree to fail
-        with patch('obsidian_mcp.search.shutil.rmtree', side_effect=OSError("Permission denied")):
+        with patch(
+            "obsidian_mcp.search.shutil.rmtree",
+            side_effect=OSError("Permission denied"),
+        ):
             result = search_index._recover_from_corruption()
             assert result is False
 
@@ -382,9 +385,12 @@ def test_recover_from_corruption_index_creation_failure():
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
         search_index = ObsidianSearchIndex(index_path)
-        
+
         # Mock index.create_in to fail
-        with patch('obsidian_mcp.search.index.create_in', side_effect=Exception("Creation failed")):
+        with patch(
+            "obsidian_mcp.search.index.create_in",
+            side_effect=Exception("Creation failed"),
+        ):
             result = search_index._recover_from_corruption()
             assert result is False
 
@@ -392,23 +398,30 @@ def test_recover_from_corruption_index_creation_failure():
 def test_ensure_index_corruption_retry_success():
     """Test _ensure_index successfully recovers from corruption on retry."""
     from whoosh.index import IndexError
-    
+
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
-        
+
         # Create a corrupted index directory first
         index_path.mkdir(parents=True)
         (index_path / "corrupted_file").write_text("bad data")
-        
+
         # Mock the sequence: first attempt fails, recovery clears index, second attempt creates new
-        with patch('obsidian_mcp.search.index.exists_in', side_effect=[True, False]), \
-             patch('obsidian_mcp.search.index.open_dir', side_effect=IndexError("Corruption")), \
-             patch.object(ObsidianSearchIndex, '_recover_from_corruption', return_value=True), \
-             patch('obsidian_mcp.search.index.create_in') as mock_create:
-            
+        with (
+            patch("obsidian_mcp.search.index.exists_in", side_effect=[True, False]),
+            patch(
+                "obsidian_mcp.search.index.open_dir",
+                side_effect=IndexError("Corruption"),
+            ),
+            patch.object(
+                ObsidianSearchIndex, "_recover_from_corruption", return_value=True
+            ),
+            patch("obsidian_mcp.search.index.create_in") as mock_create,
+        ):
+
             # This should succeed on the second attempt after recovery
             search_index = ObsidianSearchIndex(index_path)
-            
+
             # Verify new index was created after recovery
             assert mock_create.called
 
@@ -416,14 +429,21 @@ def test_ensure_index_corruption_retry_success():
 def test_ensure_index_corruption_max_retries_exceeded():
     """Test _ensure_index fails after max retries are exceeded."""
     from whoosh.index import IndexError
-    
+
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
-        
-        with patch('obsidian_mcp.search.index.exists_in', return_value=True), \
-             patch('obsidian_mcp.search.index.open_dir', side_effect=IndexError("Persistent corruption")), \
-             patch.object(ObsidianSearchIndex, '_recover_from_corruption', return_value=False):
-            
+
+        with (
+            patch("obsidian_mcp.search.index.exists_in", return_value=True),
+            patch(
+                "obsidian_mcp.search.index.open_dir",
+                side_effect=IndexError("Persistent corruption"),
+            ),
+            patch.object(
+                ObsidianSearchIndex, "_recover_from_corruption", return_value=False
+            ),
+        ):
+
             # Should raise RuntimeError after max retries
             with pytest.raises(RuntimeError, match="Unable to initialize search index"):
                 ObsidianSearchIndex(index_path)
@@ -432,26 +452,30 @@ def test_ensure_index_corruption_max_retries_exceeded():
 def test_ensure_index_handles_specific_exceptions():
     """Test _ensure_index handles specific corruption exception types."""
     from whoosh.index import IndexError, EmptyIndexError, LockError
-    
+
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
-        
+
         # Test each specific exception type
         exceptions_to_test = [
             IndexError("Index corrupted"),
             EmptyIndexError("Index empty"),
             LockError("Index locked"),
             TypeError("Type error"),
-            ValueError("Value error")
+            ValueError("Value error"),
         ]
-        
+
         for exception in exceptions_to_test:
             # For each exception, simulate recovery causing switch to create_in path
-            with patch('obsidian_mcp.search.index.exists_in', side_effect=[True, False]), \
-                 patch('obsidian_mcp.search.index.open_dir', side_effect=exception), \
-                 patch.object(ObsidianSearchIndex, '_recover_from_corruption', return_value=True), \
-                 patch('obsidian_mcp.search.index.create_in'):
-                 
+            with (
+                patch("obsidian_mcp.search.index.exists_in", side_effect=[True, False]),
+                patch("obsidian_mcp.search.index.open_dir", side_effect=exception),
+                patch.object(
+                    ObsidianSearchIndex, "_recover_from_corruption", return_value=True
+                ),
+                patch("obsidian_mcp.search.index.create_in"),
+            ):
+
                 # Should handle the exception and recover
                 search_index = ObsidianSearchIndex(index_path)
                 assert search_index is not None
@@ -460,27 +484,32 @@ def test_ensure_index_handles_specific_exceptions():
 def test_add_note_corruption_recovery_success(sample_notes):
     """Test add_note successfully recovers from corruption."""
     from whoosh.index import IndexError
-    
+
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
         search_index = ObsidianSearchIndex(index_path)
-        
+
         note = sample_notes[0]
-        
+
         # Mock writer to fail first, then succeed after recovery
-        with patch.object(search_index._index, 'writer') as mock_writer_context:
+        with patch.object(search_index._index, "writer") as mock_writer_context:
             # First call fails, second succeeds
             mock_writer1 = Mock()
             mock_writer1.update_document.side_effect = IndexError("Index corruption")
             mock_writer2 = Mock()  # Second writer succeeds
-            
-            mock_writer_context.return_value.__enter__.side_effect = [mock_writer1, mock_writer2]
-            
+
+            mock_writer_context.return_value.__enter__.side_effect = [
+                mock_writer1,
+                mock_writer2,
+            ]
+
             # Mock recovery to succeed
-            with patch.object(search_index, '_recover_from_corruption', return_value=True):
+            with patch.object(
+                search_index, "_recover_from_corruption", return_value=True
+            ):
                 # Should succeed after recovery
                 search_index.add_note(note)
-                
+
                 # Verify both attempts were made
                 assert mock_writer_context.call_count == 2
                 mock_writer2.update_document.assert_called_once()
@@ -491,17 +520,19 @@ def test_add_note_corruption_recovery_failure(sample_notes):
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
         search_index = ObsidianSearchIndex(index_path)
-        
+
         note = sample_notes[0]
-        
+
         # Mock writer to always fail
-        with patch.object(search_index._index, 'writer') as mock_writer_context:
+        with patch.object(search_index._index, "writer") as mock_writer_context:
             mock_writer = Mock()
             mock_writer.update_document.side_effect = Exception("Persistent corruption")
             mock_writer_context.return_value.__enter__.return_value = mock_writer
-            
+
             # Mock recovery to fail
-            with patch.object(search_index, '_recover_from_corruption', return_value=False):
+            with patch.object(
+                search_index, "_recover_from_corruption", return_value=False
+            ):
                 # Should raise the original exception
                 with pytest.raises(Exception, match="Persistent corruption"):
                     search_index.add_note(note)
@@ -510,13 +541,15 @@ def test_add_note_corruption_recovery_failure(sample_notes):
 def test_search_corruption_graceful_degradation(temp_index, sample_notes):
     """Test search returns empty results instead of crashing on corruption."""
     from whoosh.index import IndexError
-    
+
     temp_index.bulk_add_notes(sample_notes)
-    
+
     # Mock searcher to fail with the specific exception type caught by search()
-    with patch.object(temp_index._index, 'searcher', side_effect=IndexError("Search corruption")):
+    with patch.object(
+        temp_index._index, "searcher", side_effect=IndexError("Search corruption")
+    ):
         # Mock recovery to succeed
-        with patch.object(temp_index, '_recover_from_corruption', return_value=True):
+        with patch.object(temp_index, "_recover_from_corruption", return_value=True):
             # Should return empty results instead of crashing
             results = temp_index.search("python")
             assert results == []
@@ -525,16 +558,20 @@ def test_search_corruption_graceful_degradation(temp_index, sample_notes):
 def test_search_corruption_recovery_attempt(temp_index, sample_notes):
     """Test search attempts recovery when corruption is detected."""
     from whoosh.index import IndexError
-    
+
     temp_index.bulk_add_notes(sample_notes)
-    
+
     # Mock searcher to fail with the specific exception type caught by search()
-    with patch.object(temp_index._index, 'searcher', side_effect=IndexError("Search corruption")):
+    with patch.object(
+        temp_index._index, "searcher", side_effect=IndexError("Search corruption")
+    ):
         # Mock recovery method
-        with patch.object(temp_index, '_recover_from_corruption', return_value=True) as mock_recovery:
+        with patch.object(
+            temp_index, "_recover_from_corruption", return_value=True
+        ) as mock_recovery:
             # Should attempt recovery
             results = temp_index.search("python")
-            
+
             # Verify recovery was attempted
             mock_recovery.assert_called_once()
             assert results == []
@@ -543,12 +580,12 @@ def test_search_corruption_recovery_attempt(temp_index, sample_notes):
 def test_search_corruption_no_recovery_attempt_on_success(temp_index, sample_notes):
     """Test search doesn't attempt recovery when working normally."""
     temp_index.bulk_add_notes(sample_notes)
-    
+
     # Mock recovery method to ensure it's not called
-    with patch.object(temp_index, '_recover_from_corruption') as mock_recovery:
+    with patch.object(temp_index, "_recover_from_corruption") as mock_recovery:
         # Normal search should work
         results = temp_index.search("python")
-        
+
         # Recovery should not be called for successful searches
         mock_recovery.assert_not_called()
         assert len(results) > 0
