@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -12,6 +13,7 @@ from whoosh.qparser import MultifieldParser, QueryParser
 from whoosh.query import Query
 from whoosh.searching import Results
 from whoosh.writing import IndexWriter
+from whoosh.index import IndexError, EmptyIndexError, LockError
 
 from .config import ServerConfig
 from .parser import ObsidianNote
@@ -333,24 +335,101 @@ class ObsidianSearchIndex:
 
     def _ensure_index(self) -> None:
         """Ensure the index exists and is properly initialized."""
-        if index.exists_in(str(self.index_path)):
-            self._index = index.open_dir(str(self.index_path))
-        else:
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                if index.exists_in(str(self.index_path)):
+                    # Try to open existing index
+                    self._index = index.open_dir(str(self.index_path))
+                    # Validate the opened index
+                    self._validate_index()
+                    logger.info(f"Successfully opened existing index at {self.index_path}")
+                    return
+                else:
+                    # Create new index
+                    self._index = index.create_in(str(self.index_path), self.SCHEMA)
+                    logger.info(f"Created new index at {self.index_path}")
+                    return
+            except (IndexError, EmptyIndexError, LockError, TypeError, ValueError) as e:
+                logger.warning(f"Index corruption detected (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # Try to recover by rebuilding
+                    if self._recover_from_corruption():
+                        continue
+                else:
+                    # Final attempt failed
+                    logger.error(f"Failed to initialize index after {max_retries} attempts")
+                    raise RuntimeError(f"Unable to initialize search index: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error during index initialization: {e}")
+                if attempt < max_retries - 1 and self._recover_from_corruption():
+                    continue
+                raise
+
+    def _validate_index(self) -> None:
+        \"\"\"Validate that the index can be used for basic operations.\"\"\"
+        try:
+            with self._index.searcher() as searcher:
+                # Try to get document count - this will fail if index is corrupted
+                searcher.doc_count()
+        except Exception as e:
+            logger.warning(f\"Index validation failed: {e}\")
+            raise IndexError(f\"Index validation failed: {e}\")
+
+    def _recover_from_corruption(self) -> bool:
+        \"\"\"Attempt to recover from index corruption by removing corrupted files.\"\"\"
+        try:
+            logger.info(f\"Attempting to recover from index corruption at {self.index_path}\")
+            
+            # Remove corrupted index directory
+            if self.index_path.exists():
+                shutil.rmtree(self.index_path)
+                logger.info(f\"Removed corrupted index directory: {self.index_path}\")
+            
+            # Recreate directory
+            self.index_path.mkdir(parents=True, exist_ok=True)
+            
+            # Create fresh index
             self._index = index.create_in(str(self.index_path), self.SCHEMA)
+            logger.info(f\"Created fresh index after corruption recovery\")
+            return True
+            
+        except Exception as e:
+            logger.error(f\"Failed to recover from index corruption: {e}\")
+            return False
 
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the index."""
-        with self._index.writer() as writer:
-            writer.update_document(
-                path=str(note.path),
-                title=note.title,
-                content=note.content,
-                tags=",".join(note.tags),
-                wikilinks=",".join(note.wikilinks),
-                created_date=note.created_date,
-                modified_date=note.modified_date,
-                frontmatter=str(note.frontmatter),
-            )
+        try:
+            with self._index.writer() as writer:
+                writer.update_document(
+                    path=str(note.path),
+                    title=note.title,
+                    content=note.content,
+                    tags=",".join(note.tags),
+                    wikilinks=",".join(note.wikilinks),
+                    created_date=note.created_date,
+                    modified_date=note.modified_date,
+                    frontmatter=str(note.frontmatter),
+                )
+        except (IndexError, LockError) as e:
+            logger.error(f"Failed to add note {note.path} to index: {e}")
+            # Try to recover and retry once
+            if self._recover_from_corruption():
+                logger.info(f"Retrying add_note for {note.path} after recovery")
+                with self._index.writer() as writer:
+                    writer.update_document(
+                        path=str(note.path),
+                        title=note.title,
+                        content=note.content,
+                        tags=",".join(note.tags),
+                        wikilinks=",".join(note.wikilinks),
+                        created_date=note.created_date,
+                        modified_date=note.modified_date,
+                        frontmatter=str(note.frontmatter),
+                    )
+            else:
+                raise
 
     def remove_note(self, file_path: Path) -> None:
         """Remove a note from the index."""
@@ -387,7 +466,8 @@ class ObsidianSearchIndex:
         if search_fields is None:
             search_fields = ["title", "content", "tags"]
 
-        with self._index.searcher() as searcher:
+        try:
+            with self._index.searcher() as searcher:
             # Create parser for multi-field search
             parser = MultifieldParser(search_fields, self._index.schema)
 
@@ -454,6 +534,12 @@ class ObsidianSearchIndex:
                 )
 
             return search_results
+        except (IndexError, LockError) as e:
+            logger.error(f"Search failed due to index corruption: {e}")
+            # Try to recover and return empty results rather than crashing
+            if self._recover_from_corruption():
+                logger.info("Index recovered, but returning empty search results. Re-index needed.")
+            return []
 
     def get_note_by_path(self, file_path: Path) -> Optional[Dict]:
         """Get a specific note by its path."""

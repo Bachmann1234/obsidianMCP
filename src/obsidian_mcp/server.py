@@ -39,6 +39,8 @@ class ObsidianMCPServer:
         """Initialize the server with configuration."""
         self.config = config
         self.parser = ObsidianParser(config.vault_path)
+        logger.info(f"Initializing search index at: {config.index_path}")
+        logger.info(f"Vault path: {config.vault_path}")
         self.search_index = HybridSearchEngine(config)
         self.watcher = VaultWatcherManager(
             vault_path=config.vault_path,
