@@ -451,7 +451,7 @@ def test_ensure_index_corruption_max_retries_exceeded():
 
 def test_ensure_index_handles_specific_exceptions():
     """Test _ensure_index handles specific corruption exception types."""
-    from whoosh.index import IndexError, EmptyIndexError, LockError
+    from whoosh.index import EmptyIndexError, IndexError, LockError
 
     with tempfile.TemporaryDirectory() as temp_dir:
         index_path = Path(temp_dir) / "test_index"
