@@ -1,5 +1,5 @@
-# Use Python 3.11 slim image for smaller size
-FROM python:3.11-slim
+# Use Python 3.12 slim image for smaller size
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
-# Install the package
-RUN pip install -e .
+# Install the package (before switching to non-root user)
+RUN pip install .
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash obsidian
