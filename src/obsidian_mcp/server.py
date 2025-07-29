@@ -15,6 +15,7 @@ from mcp.types import (
     CallToolRequest,
     CallToolRequestParams,
     CallToolResult,
+    ErrorData,
     ListToolsRequest,
     ServerCapabilities,
     TextContent,
@@ -49,7 +50,7 @@ class ObsidianMCPServer:
             enabled=config.watch_for_changes,
             use_polling=config.use_polling_observer,
         )
-        self.server = Server("obsidian-mcp-server")
+        self.server: Server[Any, Any] = Server("obsidian-mcp-server")
         self._setup_tools()
 
         # Store flag to initialize index later in async context
@@ -184,7 +185,7 @@ class ObsidianMCPServer:
                 ),
             ]
 
-        @self.server.call_tool()  # type: ignore[no-untyped-call]
+        @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls."""
             try:
@@ -205,10 +206,12 @@ class ObsidianMCPServer:
                 elif name == "find_similar_notes":
                     return await self._find_similar_notes(arguments)
                 else:
-                    raise McpError(f"Unknown tool: {name}")
+                    raise McpError(ErrorData(code=-1, message=f"Unknown tool: {name}"))
             except Exception as e:
                 logger.error(f"Error in tool {name}: {e}")
-                raise McpError(f"Tool execution failed: {str(e)}")
+                raise McpError(
+                    ErrorData(code=-1, message=f"Tool execution failed: {str(e)}")
+                )
 
     async def _search_notes(self, arguments: Dict[str, Any]) -> List[TextContent]:
         """Search notes using full-text search."""
@@ -598,16 +601,16 @@ class ObsidianMCPServer:
             self.watcher.stop()
 
 
-@click.command()  # type: ignore[attr-defined]
-@click.option(  # type: ignore[attr-defined]
+@click.command()
+@click.option(
     "--vault-path",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),  # type: ignore[attr-defined]
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
     help="Path to Obsidian vault directory",
 )
-@click.option(  # type: ignore[attr-defined]
-    "--index-path", type=click.Path(path_type=Path), help="Path to store search index"  # type: ignore[attr-defined]
+@click.option(
+    "--index-path", type=click.Path(path_type=Path), help="Path to store search index"
 )
-@click.option(  # type: ignore[attr-defined]
+@click.option(
     "--max-results", type=int, default=50, help="Maximum number of search results"
 )
 def main(
