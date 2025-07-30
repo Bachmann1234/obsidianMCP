@@ -21,16 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
-# Install the package (before switching to non-root user)
+# Install the package
 RUN pip install .
 
-# Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash obsidian
-
-# Create index directories with proper permissions
-RUN mkdir -p /app/index /app/vector-index && chown obsidian:obsidian /app/index /app/vector-index
-
-USER obsidian
+# Create index directories - permissions will be handled by running with host user
+RUN mkdir -p /app/index /app/vector-index
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
