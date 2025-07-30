@@ -39,7 +39,9 @@ class VaultWatcher(FileSystemEventHandler):
         self.search_index = search_index
         self.on_change_callback = on_change_callback
         self.use_polling = use_polling
-        self.observer: Optional[Any] = None  # Observer type not available
+        self.observer: Optional[Any] = (
+            None  # Observer type from watchdog not available for typing
+        )
 
     def start_watching(self) -> None:
         """Start watching the vault for changes."""
@@ -56,8 +58,8 @@ class VaultWatcher(FileSystemEventHandler):
             self.observer = Observer()
             logger.info("Using native OS file watcher")
 
-        self.observer.schedule(self, str(self.vault_path), recursive=True)  # type: ignore[no-untyped-call]
-        self.observer.start()  # type: ignore[no-untyped-call]
+        self.observer.schedule(self, str(self.vault_path), recursive=True)  # type: ignore[no-untyped-call,unused-ignore]
+        self.observer.start()  # type: ignore[no-untyped-call,unused-ignore]
         logger.info(f"Started watching vault at {self.vault_path}")
 
     def stop_watching(self) -> None:
@@ -107,7 +109,11 @@ class VaultWatcher(FileSystemEventHandler):
             return
 
         old_path = Path(str(event.src_path))
-        new_path = Path(str(getattr(event, "dest_path", "")))
+
+        if not hasattr(event, "dest_path") or not event.dest_path:
+            logger.error("Missing 'dest_path' in file move event")
+            return
+        new_path = Path(str(event.dest_path))
 
         if self._should_process_file(old_path):
             logger.info(f"File moved: {old_path} -> {new_path}")

@@ -604,12 +604,10 @@ class ObsidianMCPServer:
 @click.command()
 @click.option(
     "--vault-path",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to Obsidian vault directory",
 )
-@click.option(
-    "--index-path", type=click.Path(path_type=Path), help="Path to store search index"
-)
+@click.option("--index-path", type=click.Path(), help="Path to store search index")
 @click.option(
     "--max-results", type=int, default=50, help="Maximum number of search results"
 )
