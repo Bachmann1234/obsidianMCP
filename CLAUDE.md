@@ -12,12 +12,26 @@ This is an Obsidian MCP (Model Context Protocol) server implementation that prov
 - Python 3.8 or higher
 - pip package manager
 
+### Virtual Environment Setup
+**IMPORTANT**: Always use a virtual environment when running Python or Python-related commands in this repository. The virtual environment should be located in the `venv/` directory.
+
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+```
+
 ### Installation
 ```bash
-# Install in development mode
+# Install in development mode (with venv activated)
 pip install -e ".[dev]"
 
-# Or just dependencies
+# Or just dependencies (with venv activated)
 pip install -e .
 ```
 
@@ -67,6 +81,8 @@ obsidian-mcp-server --vault-path /path/to/vault --max-results 100
 ```
 
 ### Development Commands
+**Note**: All commands below should be run with the virtual environment activated.
+
 ```bash
 # Run tests
 pytest

@@ -418,7 +418,6 @@ def test_ensure_index_corruption_retry_success():
             ),
             patch("obsidian_mcp.search.index.create_in") as mock_create,
         ):
-
             # This should succeed on the second attempt after recovery
             search_index = ObsidianSearchIndex(index_path)
 
@@ -443,7 +442,6 @@ def test_ensure_index_corruption_max_retries_exceeded():
                 ObsidianSearchIndex, "_recover_from_corruption", return_value=False
             ),
         ):
-
             # Should raise RuntimeError after max retries
             with pytest.raises(RuntimeError, match="Unable to initialize search index"):
                 ObsidianSearchIndex(index_path)
@@ -475,7 +473,6 @@ def test_ensure_index_handles_specific_exceptions():
                 ),
                 patch("obsidian_mcp.search.index.create_in"),
             ):
-
                 # Should handle the exception and recover
                 search_index = ObsidianSearchIndex(index_path)
                 assert search_index is not None

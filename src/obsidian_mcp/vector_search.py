@@ -60,9 +60,9 @@ class VectorSearchEngine:
             self._embedding_model = SentenceTransformer(self.embedding_model_name)
         return self._embedding_model
 
-    def _generate_doc_id(self, note_path: str) -> str:
+    def _generate_doc_id(self, note_path: Path) -> str:
         """Generate a unique document ID from note path."""
-        return hashlib.md5(note_path.encode()).hexdigest()
+        return hashlib.md5(str(note_path).encode()).hexdigest()
 
     def _prepare_text_for_embedding(self, note: ObsidianNote) -> str:
         """Prepare note text for embedding generation."""
@@ -87,7 +87,7 @@ class VectorSearchEngine:
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the vector index."""
         try:
-            doc_id = self._generate_doc_id(str(note.path))
+            doc_id = self._generate_doc_id(note.path)
             text = self._prepare_text_for_embedding(note)
 
             # Generate embedding
@@ -135,7 +135,7 @@ class VectorSearchEngine:
     def remove_note(self, note_path: str) -> None:
         """Remove a note from the vector index."""
         try:
-            doc_id = self._generate_doc_id(note_path)
+            doc_id = self._generate_doc_id(Path(note_path))
 
             # Check if document exists before trying to delete
             existing = self.collection.get(ids=[doc_id])
@@ -233,7 +233,7 @@ class VectorSearchEngine:
             List of similar notes with metadata and scores
         """
         try:
-            doc_id = self._generate_doc_id(note_path)
+            doc_id = self._generate_doc_id(Path(note_path))
 
             # Get the note's embedding
             existing = self.collection.get(
