@@ -24,26 +24,21 @@ if ! docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Ensure Docker volumes exist and fix ownership if needed
-docker volume create obsidian-mcp-index >/dev/null 2>&1 || true
-docker volume create obsidian-mcp-vector-index >/dev/null 2>&1 || true
-docker volume create obsidian-mcp-cache >/dev/null 2>&1 || true
+# Get host user and group IDs
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
 
-# Fix ownership of volume directories by running a quick init container
-docker run --rm \
-  --user root \
-  -v obsidian-mcp-index:/app/index \
-  -v obsidian-mcp-vector-index:/app/vector-index \
-  -v obsidian-mcp-cache:/app/.cache \
-  "$DOCKER_IMAGE" \
-  sh -c "mkdir -p /app/.cache/sentence_transformers /app/.cache/transformers && chown -R $(id -u):$(id -g) /app/index /app/vector-index /app/.cache"
+# Use bind mounts to host directories for persistence
+# Create index directories in user's home directory
+INDEX_BASE="${HOME}/.obsidian-mcp"
+mkdir -p "${INDEX_BASE}/index" "${INDEX_BASE}/vector-index" "${INDEX_BASE}/cache"
 
 # Run the MCP server in Docker with stdio communication
 exec docker run -i --rm \
   --user "$(id -u):$(id -g)" \
   -e OBSIDIAN_VAULT_PATH=/vault \
-  -e OBSIDIAN_INDEX_PATH=/app/index \
-  -e OBSIDIAN_VECTOR_INDEX_PATH=/app/vector-index \
+  -e OBSIDIAN_INDEX_PATH=/data/index \
+  -e OBSIDIAN_VECTOR_INDEX_PATH=/data/vector-index \
   -e OBSIDIAN_MAX_RESULTS=50 \
   -e OBSIDIAN_AUTO_REBUILD_INDEX=true \
   -e OBSIDIAN_WATCH_CHANGES=true \
@@ -51,10 +46,10 @@ exec docker run -i --rm \
   -e OBSIDIAN_EMBEDDING_MODEL=all-MiniLM-L6-v2 \
   -e OBSIDIAN_HYBRID_ALPHA=0.5 \
   -e OBSIDIAN_USE_POLLING_OBSERVER=true \
-  -e HF_HOME=/app/.cache \
-  -e SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers \
-  -v "$VAULT_PATH":/vault \
-  -v obsidian-mcp-index:/app/index \
-  -v obsidian-mcp-vector-index:/app/vector-index \
-  -v obsidian-mcp-cache:/app/.cache \
+  -e HF_HOME=/data/cache \
+  -e SENTENCE_TRANSFORMERS_HOME=/data/cache/sentence_transformers \
+  -v "$VAULT_PATH":/vault:ro \
+  -v "${INDEX_BASE}/index":/data/index \
+  -v "${INDEX_BASE}/vector-index":/data/vector-index \
+  -v "${INDEX_BASE}/cache":/data/cache \
   "$DOCKER_IMAGE"
