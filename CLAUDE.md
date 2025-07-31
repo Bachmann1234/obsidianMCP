@@ -35,6 +35,7 @@ export OBSIDIAN_AUTO_REBUILD_INDEX=true      # Default: true
 export OBSIDIAN_INCREMENTAL_UPDATE=true      # Default: true
 export OBSIDIAN_WATCH_CHANGES=true           # Default: true
 export OBSIDIAN_INCLUDE_CONTENT=true         # Default: true
+export OBSIDIAN_USE_POLLING_OBSERVER=true    # Default: false - Use polling for Docker/network drives
 ```
 
 ## Architecture
@@ -85,6 +86,9 @@ isort src/
 
 # Run all quality checks
 pytest --cov=src/obsidian_mcp && mypy src/ && black --check src/ && isort --check-only src/
+
+# Update lock files
+./update-locks.sh
 ```
 
 ### Testing with Claude Desktop
@@ -158,9 +162,12 @@ The server intelligently manages index updates:
 - **Incremental update**: Only re-indexes changed files (fast!)
 - **Real-time watching**: Live updates during server operation
 - **Multi-machine friendly**: Each machine maintains optimized local index
+- **Polling mode**: Optional polling-based watcher for Docker/network drives
 - File creation/modification: Parse and re-index note
 - File deletion: Remove from index
 - File moves: Remove old path, add new path
+
+**Docker Note**: The Docker wrapper script now enables polling mode by default (`OBSIDIAN_USE_POLLING_OBSERVER=true`) for better file change detection in containerized environments.
 
 ### Error Handling
 - Graceful parsing failures (logs warnings, continues processing)
@@ -183,3 +190,5 @@ If changes aren't detected:
 - Check file permissions
 - Verify vault path is correct
 - Look for errors in server logs
+- Enable polling mode with `OBSIDIAN_USE_POLLING_OBSERVER=true` (automatically enabled in Docker)
+- For Docker: Ensure you're using the latest wrapper script without read-only mount

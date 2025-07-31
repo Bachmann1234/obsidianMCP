@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from .parser import ObsidianParser
 from .search import HybridSearchEngine
@@ -22,12 +23,22 @@ class VaultWatcher(FileSystemEventHandler):
         parser: ObsidianParser,
         search_index: HybridSearchEngine,
         on_change_callback: Optional[Callable] = None,
+        use_polling: bool = False,
     ):
-        """Initialize the vault watcher."""
+        """Initialize the vault watcher.
+
+        Args:
+            vault_path: Path to the Obsidian vault
+            parser: ObsidianParser instance
+            search_index: HybridSearchEngine instance
+            on_change_callback: Optional callback for change events
+            use_polling: Use polling observer instead of native OS events
+        """
         self.vault_path = vault_path
         self.parser = parser
         self.search_index = search_index
         self.on_change_callback = on_change_callback
+        self.use_polling = use_polling
         self.observer: Optional[Observer] = None
 
     def start_watching(self) -> None:
@@ -36,7 +47,15 @@ class VaultWatcher(FileSystemEventHandler):
             logger.warning("Watcher is already running")
             return
 
-        self.observer = Observer()
+        if self.use_polling:
+            self.observer = PollingObserver()
+            logger.info(
+                "Using polling-based file watcher (better for Docker/network drives)"
+            )
+        else:
+            self.observer = Observer()
+            logger.info("Using native OS file watcher")
+
         self.observer.schedule(self, str(self.vault_path), recursive=True)
         self.observer.start()
         logger.info(f"Started watching vault at {self.vault_path}")
@@ -138,12 +157,22 @@ class VaultWatcherManager:
         parser: ObsidianParser,
         search_index: HybridSearchEngine,
         enabled: bool = True,
+        use_polling: bool = False,
     ):
-        """Initialize the watcher manager."""
+        """Initialize the watcher manager.
+
+        Args:
+            vault_path: Path to the Obsidian vault
+            parser: ObsidianParser instance
+            search_index: HybridSearchEngine instance
+            enabled: Whether file watching is enabled
+            use_polling: Use polling observer instead of native OS events
+        """
         self.vault_path = vault_path
         self.parser = parser
         self.search_index = search_index
         self.enabled = enabled
+        self.use_polling = use_polling
         self.watcher: Optional[VaultWatcher] = None
         self.stats = {
             "files_updated": 0,
@@ -167,6 +196,7 @@ class VaultWatcherManager:
             parser=self.parser,
             search_index=self.search_index,
             on_change_callback=self._on_change,
+            use_polling=self.use_polling,
         )
 
         try:

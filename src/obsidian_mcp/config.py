@@ -50,6 +50,10 @@ class ServerConfig(BaseModel):
         le=1.0,
         description="Weight for combining text and vector search (0.0 = text only, 1.0 = vector only)",
     )
+    use_polling_observer: bool = Field(
+        default=False,
+        description="Use polling-based file watcher instead of native OS events (better for Docker/network drives)",
+    )
 
     @field_validator("vault_path")
     @classmethod
@@ -120,5 +124,8 @@ def load_config_from_env() -> ServerConfig:
 
     if hybrid_alpha := os.getenv("OBSIDIAN_HYBRID_ALPHA"):
         kwargs["hybrid_alpha"] = float(hybrid_alpha)
+
+    if use_polling := os.getenv("OBSIDIAN_USE_POLLING_OBSERVER"):
+        kwargs["use_polling_observer"] = use_polling.lower() == "true"
 
     return ServerConfig(**kwargs)

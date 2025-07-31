@@ -27,14 +27,16 @@ fi
 # Ensure Docker volumes exist and fix ownership if needed
 docker volume create obsidian-mcp-index >/dev/null 2>&1 || true
 docker volume create obsidian-mcp-vector-index >/dev/null 2>&1 || true
+docker volume create obsidian-mcp-cache >/dev/null 2>&1 || true
 
 # Fix ownership of volume directories by running a quick init container
 docker run --rm \
   --user root \
   -v obsidian-mcp-index:/app/index \
   -v obsidian-mcp-vector-index:/app/vector-index \
+  -v obsidian-mcp-cache:/app/.cache \
   "$DOCKER_IMAGE" \
-  chown -R "$(id -u):$(id -g)" /app/index /app/vector-index
+  sh -c "mkdir -p /app/.cache/sentence_transformers /app/.cache/transformers && chown -R $(id -u):$(id -g) /app/index /app/vector-index /app/.cache"
 
 # Run the MCP server in Docker with stdio communication
 exec docker run -i --rm \
@@ -48,7 +50,11 @@ exec docker run -i --rm \
   -e OBSIDIAN_INCLUDE_CONTENT=true \
   -e OBSIDIAN_EMBEDDING_MODEL=all-MiniLM-L6-v2 \
   -e OBSIDIAN_HYBRID_ALPHA=0.5 \
-  -v "$VAULT_PATH":/vault:ro \
+  -e OBSIDIAN_USE_POLLING_OBSERVER=true \
+  -e HF_HOME=/app/.cache \
+  -e SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers \
+  -v "$VAULT_PATH":/vault \
   -v obsidian-mcp-index:/app/index \
   -v obsidian-mcp-vector-index:/app/vector-index \
+  -v obsidian-mcp-cache:/app/.cache \
   "$DOCKER_IMAGE"
