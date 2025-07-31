@@ -50,7 +50,7 @@ class VaultWatcher(FileSystemEventHandler):
             return
 
         if self.use_polling:
-            self.observer = PollingObserver()
+            self.observer = PollingObserver()  # type: ignore[no-untyped-call]
             logger.info(
                 "Using polling-based file watcher (better for Docker/network drives)"
             )
