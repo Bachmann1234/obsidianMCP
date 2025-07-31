@@ -25,11 +25,15 @@ COPY src/ ./src/
 RUN pip install .
 
 # Create index directories - permissions will be handled by running with host user
-RUN mkdir -p /app/index /app/vector-index
+RUN mkdir -p /app/index /app/vector-index /app/.cache
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+
+# Set HuggingFace cache directories to a writable location
+ENV HF_HOME=/app/.cache
+ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
 
 # Default command
 CMD ["obsidian-mcp-server"]

@@ -47,6 +47,7 @@ class ObsidianMCPServer:
             parser=self.parser,
             search_index=self.search_index,
             enabled=config.watch_for_changes,
+            use_polling=config.use_polling_observer,
         )
         self.server = Server("obsidian-mcp-server")
         self._setup_tools()

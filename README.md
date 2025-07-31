@@ -34,6 +34,10 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 # OR
 pip install -e ".[dev]"
+
+# For reproducible installs using lock files (requires uv)
+uv pip sync requirements.lock              # Production dependencies only
+uv pip sync requirements-dev.lock          # With development dependencies
 ```
 
 ### Option 2: Docker
@@ -81,6 +85,7 @@ export OBSIDIAN_AUTO_REBUILD_INDEX=true      # Default: true
 export OBSIDIAN_INCREMENTAL_UPDATE=true      # Default: true
 export OBSIDIAN_WATCH_CHANGES=true           # Default: true
 export OBSIDIAN_INCLUDE_CONTENT=true         # Default: true
+export OBSIDIAN_USE_POLLING_OBSERVER=false   # Default: false (set to true for Docker/network drives)
 ```
 
 ### Running the Server
