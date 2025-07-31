@@ -42,8 +42,6 @@ distro==1.9.0
     # via posthog
 durationpy==0.10
     # via kubernetes
-exceptiongroup==1.3.0
-    # via anyio
 filelock==3.18.0
     # via
     #   huggingface-hub
@@ -253,6 +251,8 @@ scipy==1.15.3
     #   sentence-transformers
 sentence-transformers==5.0.0
     # via obsidian-mcp-server (pyproject.toml)
+setuptools==80.9.0
+    # via torch
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -278,8 +278,6 @@ tokenizers==0.21.4
     # via
     #   chromadb
     #   transformers
-tomli==2.2.1
-    # via build
 torch==2.7.1
     # via sentence-transformers
 tqdm==4.67.1
@@ -296,7 +294,6 @@ typing-extensions==4.14.1
     # via
     #   anyio
     #   chromadb
-    #   exceptiongroup
     #   huggingface-hub
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -310,7 +307,6 @@ typing-extensions==4.14.1
     #   torch
     #   typer
     #   typing-inspection
-    #   uvicorn
 typing-inspection==0.4.1
     # via
     #   pydantic
