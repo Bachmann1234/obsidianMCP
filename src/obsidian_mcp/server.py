@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from .config import ServerConfig, load_config_from_env
 from .parser import ObsidianParser
 from .search import HybridSearchEngine
+from .startup_coordination import StartupCoordinator
 from .watcher import VaultWatcherManager
 
 # Configure logging
@@ -515,7 +516,7 @@ class ObsidianMCPServer:
             return [TextContent(type="text", text=f"Error retrieving stats: {str(e)}")]
 
     async def _initialize_index(self) -> None:
-        """Initialize the search index by discovering and parsing all notes."""
+        """Initialize the search index with process coordination to prevent conflicts."""
         logger.info("Initializing search index...")
 
         try:
@@ -523,6 +524,65 @@ class ObsidianMCPServer:
             note_paths = self.parser.discover_notes()
             logger.info(f"Discovered {len(note_paths)} notes in vault")
 
+            # Use startup coordination to prevent multiple processes from initializing simultaneously
+            if self.config.index_path is None:
+                raise ValueError("index_path cannot be None")
+
+            coordinator = StartupCoordinator(self.config.index_path, timeout=90.0)
+
+            # Fast path: check if index is already properly initialized
+            if self.search_index.is_properly_initialized(len(note_paths)):
+                logger.info(
+                    "Index is already properly initialized, skipping initialization"
+                )
+                return
+
+            # Try to acquire coordination lock
+            if coordinator.acquire_coordination_lock():
+                # This process is the coordinator - perform initialization
+                logger.info("Acquired startup coordination lock, initializing index...")
+                await self._perform_index_initialization(note_paths)
+
+                # Release the lock to signal completion
+                coordinator.release_coordination_lock()
+                logger.info("Index initialization completed, lock released")
+
+            else:
+                # Another process is coordinating - wait for completion
+                logger.info(
+                    "Another process is initializing the index, waiting for completion..."
+                )
+                if coordinator.wait_for_initialization():
+                    logger.info("Index initialization completed by another process")
+
+                    # Verify the index is now properly initialized
+                    if self.search_index.is_properly_initialized(len(note_paths)):
+                        logger.info("Verified: Index is properly initialized")
+                    else:
+                        logger.warning(
+                            "Index initialization by another process may have failed, attempting fallback"
+                        )
+                        await self._perform_index_initialization(note_paths)
+                else:
+                    logger.error(
+                        "Timeout waiting for another process to complete initialization"
+                    )
+                    raise RuntimeError(
+                        "Failed to coordinate index initialization with other processes. "
+                        "This may indicate multiple server instances are stuck or there's a stale lock file."
+                    )
+
+        except Exception as e:
+            logger.error(f"Failed to initialize index: {e}")
+            raise
+
+    async def _perform_index_initialization(self, note_paths: List[Path]) -> None:
+        """Perform the actual index initialization work.
+
+        Args:
+            note_paths: List of paths to markdown notes discovered in the vault.
+        """
+        try:
             # Check current index stats
             current_stats = self.search_index.get_stats()
             logger.info(
@@ -572,10 +632,10 @@ class ObsidianMCPServer:
 
             # Rebuild search index
             self.search_index.rebuild_index(notes)
-            logger.info("Search index initialized successfully")
+            logger.info("Search index initialization completed successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize index: {e}")
+            logger.error(f"Error during index initialization: {e}")
             raise
 
     async def run(self) -> None:
