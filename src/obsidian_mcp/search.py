@@ -3,9 +3,10 @@
 import logging
 import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from whoosh import fields, index
 from whoosh.filedb.filestore import FileStorage
@@ -288,6 +289,77 @@ class HybridSearchEngine:
         """Check if indices need updating."""
         return self.text_search.needs_update(vault_path)
 
+    def is_properly_initialized(self, expected_note_count: int = 0) -> bool:
+        """Fast check if both text and vector indices are properly initialized.
+
+        Args:
+            expected_note_count: Expected number of notes (0 to skip count check)
+
+        Returns:
+            True if both indices appear to be properly initialized, False otherwise.
+        """
+        # Check text search index
+        if not self.text_search.is_properly_initialized(expected_note_count):
+            return False
+
+        # Check vector search index (more lenient check)
+        # Vector index can be rebuilt separately if needed, so don't block on it
+        try:
+            vector_stats = self.vector_search.get_stats()
+            vector_count = vector_stats.get("document_count", 0)
+
+            # Only log if vector index appears empty - don't block initialization
+            if expected_note_count > 0 and vector_count == 0:
+                logger.info(
+                    f"Vector index appears empty ({vector_count} docs) while text index has content"
+                )
+                logger.info(
+                    "Allowing initialization to proceed; vector index can be rebuilt separately"
+                )
+
+        except Exception as e:
+            logger.warning(f"Error checking vector index status: {e}")
+            # Don't block initialization due to vector index issues
+
+        return True
+
+    def quick_health_check(self) -> Dict[str, Any]:
+        """Perform a quick health check of both text and vector indices.
+
+        Returns:
+            Dictionary with health check results for both indices.
+        """
+        health: Dict[str, Any] = {
+            "text_index": self.text_search.quick_health_check(),
+            "vector_index": {"status": "unknown", "errors": []},
+            "overall_healthy": False,
+        }
+
+        # Check vector index health
+        try:
+            vector_stats = self.vector_search.get_stats()
+            health["vector_index"] = {
+                "status": "healthy",
+                "document_count": vector_stats.get("document_count", 0),
+                "errors": [],
+            }
+        except Exception as e:
+            health["vector_index"] = {
+                "status": "error",
+                "errors": [f"Vector index error: {str(e)}"],
+            }
+
+        # Determine overall health
+        text_errors = health["text_index"].get("errors", [])
+        vector_errors = health["vector_index"].get("errors", [])
+        text_healthy = len(text_errors) == 0 if isinstance(text_errors, list) else False
+        vector_healthy = (
+            len(vector_errors) == 0 if isinstance(vector_errors, list) else False
+        )
+        health["overall_healthy"] = text_healthy and vector_healthy
+
+        return health
+
     def incremental_update(self, vault_path: Path, parser: Any) -> Dict[str, int]:
         """Perform incremental update of both indices."""
         stats = self.text_search.incremental_update(vault_path, parser)
@@ -410,9 +482,54 @@ class ObsidianSearchIndex:
             logger.error(f"Failed to recover from index corruption: {e}")
             return False
 
+    def _retry_with_exponential_backoff(
+        self, func: Callable[[], Any], max_retries: int = 5, initial_delay: float = 0.1
+    ) -> Any:
+        """Retry a function with exponential backoff on LockError.
+
+        Args:
+            func: Function to retry (should be a callable that may raise LockError)
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay in seconds (doubles each retry)
+
+        Returns:
+            Result of successful function call
+
+        Raises:
+            LockError: If all retries fail
+        """
+        delay = initial_delay
+        last_exception = None
+
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
+            try:
+                return func()
+            except LockError as e:
+                last_exception = e
+                if attempt == max_retries:
+                    logger.error(
+                        f"Failed to acquire index lock after {max_retries + 1} attempts. "
+                        f"This may indicate multiple server instances are running concurrently."
+                    )
+                    break
+
+                logger.warning(
+                    f"Index lock contention detected (attempt {attempt + 1}/{max_retries + 1}). "
+                    f"Retrying in {delay:.2f}s..."
+                )
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+            except Exception as e:
+                # Don't retry on non-lock errors
+                raise
+
+        # If we get here, all retries failed
+        raise last_exception or LockError("Failed to acquire lock after retries")
+
     def add_note(self, note: ObsidianNote) -> None:
         """Add or update a note in the index."""
-        try:
+
+        def add_note_operation() -> None:
             with self._index.writer() as writer:  # type: ignore[union-attr]
                 writer.update_document(
                     path=str(note.path),
@@ -424,12 +541,37 @@ class ObsidianSearchIndex:
                     modified_date=note.modified_date,
                     frontmatter=str(note.frontmatter),
                 )
+
+        try:
+            # Use retry mechanism for lock errors
+            self._retry_with_exponential_backoff(add_note_operation)
         except (IndexError, LockError) as e:
             logger.error(f"Failed to add note {note.path} to index: {e}")
-            # Try to recover and retry once
-            if self._recover_from_corruption():
-                logger.info(f"Retrying add_note for {note.path} after recovery")
-                with self._index.writer() as writer:  # type: ignore[union-attr]
+            # Try to recover from corruption and retry once more
+            if isinstance(e, IndexError) and self._recover_from_corruption():
+                logger.info(
+                    f"Retrying add_note for {note.path} after corruption recovery"
+                )
+                self._retry_with_exponential_backoff(add_note_operation)
+            else:
+                raise
+
+    def remove_note(self, file_path: Path) -> None:
+        """Remove a note from the index."""
+
+        def remove_operation() -> None:
+            with self._index.writer() as writer:  # type: ignore[union-attr]
+                writer.delete_by_term("path", str(file_path))
+
+        # Use retry mechanism for lock errors
+        self._retry_with_exponential_backoff(remove_operation)
+
+    def bulk_add_notes(self, notes: List[ObsidianNote]) -> None:
+        """Add multiple notes to the index efficiently."""
+
+        def bulk_add_operation() -> None:
+            with self._index.writer() as writer:  # type: ignore[union-attr]
+                for note in notes:
                     writer.update_document(
                         path=str(note.path),
                         title=note.title,
@@ -440,28 +582,9 @@ class ObsidianSearchIndex:
                         modified_date=note.modified_date,
                         frontmatter=str(note.frontmatter),
                     )
-            else:
-                raise
 
-    def remove_note(self, file_path: Path) -> None:
-        """Remove a note from the index."""
-        with self._index.writer() as writer:  # type: ignore[union-attr]
-            writer.delete_by_term("path", str(file_path))
-
-    def bulk_add_notes(self, notes: List[ObsidianNote]) -> None:
-        """Add multiple notes to the index efficiently."""
-        with self._index.writer() as writer:  # type: ignore[union-attr]
-            for note in notes:
-                writer.update_document(
-                    path=str(note.path),
-                    title=note.title,
-                    content=note.content,
-                    tags=",".join(note.tags),
-                    wikilinks=",".join(note.wikilinks),
-                    created_date=note.created_date,
-                    modified_date=note.modified_date,
-                    frontmatter=str(note.frontmatter),
-                )
+        # Use retry mechanism for lock errors
+        self._retry_with_exponential_backoff(bulk_add_operation)
 
     def search(
         self,
@@ -547,12 +670,18 @@ class ObsidianSearchIndex:
 
                 return search_results
         except (IndexError, LockError) as e:
-            logger.error(f"Search failed due to index corruption: {e}")
-            # Try to recover and return empty results rather than crashing
-            if self._recover_from_corruption():
+            if isinstance(e, LockError):
+                logger.error(f"Search failed due to index lock contention: {e}")
                 logger.info(
-                    "Index recovered, but returning empty search results. Re-index needed."
+                    "This may indicate multiple server instances are accessing the index concurrently."
                 )
+            else:
+                logger.error(f"Search failed due to index corruption: {e}")
+                # Try to recover and return empty results rather than crashing
+                if self._recover_from_corruption():
+                    logger.info(
+                        "Index recovered, but returning empty search results. Re-index needed."
+                    )
             return []
 
     def get_note_by_path(self, file_path: Path) -> Optional[Dict[str, Any]]:
@@ -626,20 +755,30 @@ class ObsidianSearchIndex:
 
     def rebuild_index(self, notes: List[ObsidianNote]) -> None:
         """Completely rebuild the search index."""
-        # Clear existing index by removing all documents
-        with self._index.writer() as writer:  # type: ignore[union-attr]
-            # Truncate the index (remove all documents)
-            from whoosh.query import Every
 
-            writer.delete_by_query(Every())
+        # Clear existing index by removing all documents
+        def clear_index() -> None:
+            with self._index.writer() as writer:  # type: ignore[union-attr]
+                # Truncate the index (remove all documents)
+                from whoosh.query import Every
+
+                writer.delete_by_query(Every())
+
+        # Use retry mechanism for clearing the index
+        self._retry_with_exponential_backoff(clear_index)
 
         # Add all notes
         self.bulk_add_notes(notes)
 
     def optimize_index(self) -> None:
         """Optimize the index for better performance."""
-        with self._index.writer() as writer:  # type: ignore[union-attr]
-            writer.commit(optimize=True)
+
+        def optimize_operation() -> None:
+            with self._index.writer() as writer:  # type: ignore[union-attr]
+                writer.commit(optimize=True)
+
+        # Use retry mechanism for lock errors
+        self._retry_with_exponential_backoff(optimize_operation)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get index statistics."""
@@ -685,6 +824,101 @@ class ObsidianSearchIndex:
             return False
         except Exception:
             return True  # Err on the side of caution
+
+    def is_properly_initialized(self, expected_note_count: int = 0) -> bool:
+        """Fast check if index is properly initialized and ready for use.
+
+        Args:
+            expected_note_count: Expected number of notes (0 to skip count check)
+
+        Returns:
+            True if index appears to be properly initialized, False otherwise.
+        """
+        try:
+            # Check if index directory and files exist
+            if not self.index_path.exists():
+                return False
+
+            # Check for essential Whoosh index files
+            toc_files = list(self.index_path.glob("*.toc"))
+            if not toc_files:
+                return False
+
+            # Try to open index and get basic stats without long operations
+            with self._index.searcher() as searcher:  # type: ignore[union-attr]
+                doc_count = searcher.doc_count()
+
+                # If we have an expected count, verify it roughly matches
+                if expected_note_count > 0:
+                    # Allow some variance (±10%) for small differences
+                    variance_threshold = max(1, int(expected_note_count * 0.1))
+                    if abs(doc_count - expected_note_count) > variance_threshold:
+                        logger.info(
+                            f"Index doc count ({doc_count}) doesn't match expected ({expected_note_count})"
+                        )
+                        return False
+
+                # Check if index has any documents at all
+                if doc_count == 0 and expected_note_count > 0:
+                    logger.info("Index appears empty but notes are expected")
+                    return False
+
+            logger.info(
+                f"Index appears properly initialized with {doc_count} documents"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Error checking index initialization status: {e}")
+            return False
+
+    def quick_health_check(self) -> Dict[str, Any]:
+        """Perform a quick health check of the index.
+
+        Returns:
+            Dictionary with health check results.
+        """
+        health: Dict[str, Any] = {
+            "index_exists": False,
+            "has_documents": False,
+            "doc_count": 0,
+            "last_modified": None,
+            "essential_files_present": False,
+            "errors": [],
+        }
+
+        try:
+            # Check if index directory exists
+            health["index_exists"] = self.index_path.exists()
+            if not health["index_exists"]:
+                errors = health["errors"]
+                if isinstance(errors, list):
+                    errors.append("Index directory does not exist")
+                return health
+
+            # Check for essential files
+            toc_files = list(self.index_path.glob("*.toc"))
+            health["essential_files_present"] = len(toc_files) > 0
+            if not health["essential_files_present"]:
+                errors = health["errors"]
+                if isinstance(errors, list):
+                    errors.append("Essential index files (.toc) not found")
+
+            # Get last modified time
+            health["last_modified"] = self._get_index_last_modified()
+
+            # Try to get document count
+            if self._index:
+                with self._index.searcher() as searcher:
+                    health["doc_count"] = searcher.doc_count()
+                    health["has_documents"] = health["doc_count"] > 0
+
+        except Exception as e:
+            errors = health["errors"]
+            if isinstance(errors, list):
+                errors.append(f"Error during health check: {str(e)}")
+
+        return health
 
     def incremental_update(self, vault_path: Path, parser: Any) -> Dict[str, int]:
         """Perform incremental update of files newer than index."""

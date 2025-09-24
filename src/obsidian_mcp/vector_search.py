@@ -202,7 +202,7 @@ class VectorSearchEngine:
                         "tags": json.loads(str(metadata.get("tags", "[]"))),
                         "created_date": str(metadata.get("created_date", "")),
                         "modified_date": str(metadata.get("modified_date", "")),
-                        "content_length": int(metadata.get("content_length") or 0),
+                        "content_length": int(str(metadata.get("content_length", 0))),
                     }
 
                     processed_results.append(result)
